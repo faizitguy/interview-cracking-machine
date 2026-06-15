@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ICM — AI Bridge Test (Phase 1)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0c0b1a; color: #e8e6f5;
+         font: 14px/1.55 Inter, system-ui, sans-serif; padding: 32px; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8f8cb5; margin: 0 0 24px; }
+  .card { background: #141329; border: 1px solid #2a2750; border-radius: 14px;
+          padding: 18px 20px; margin-bottom: 20px; }
+  button { background: #7f77dd; color: #fff; border: 0; border-radius: 9px;
+           padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 14px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  pre { background: #0a0917; border: 1px solid #2a2750; border-radius: 9px;
+        padding: 14px; max-height: 320px; overflow: auto; white-space: pre-wrap;
+        word-break: break-word; color: #cfccf0; font-size: 12.5px; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { padding: 8px 10px; border: 1px solid #2a2750; border-radius: 8px;
+       margin-bottom: 6px; background: #1a1833; }
+  .meta { color: #8f8cb5; font-size: 12px; }
+  .label { color: #5b5880; font-size: 11px; text-transform: uppercase;
+           letter-spacing: 1px; margin: 0 0 10px; }
+  .warn { background: #3a1a1a; border-color: #6a2e2e; color: #f3c0c0; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+         background: #3fcba4; margin-right: 6px; }
+  .dot.off { background: #6a2e2e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Interview Cracking Machine</h1>
+  <p class="sub">Phase 1 — AI bridge smoke test. The button asks Claude to append a line to today's log; the list below updates live as files change.</p>
+
+  <div id="setup" class="card warn" style="display:none"></div>
+
+  <div class="card">
+    <p class="label">AI action</p>
+    <button id="askBtn">Append test line to today's log</button>
+    <span id="status" class="meta" style="margin-left:12px"></span>
+    <pre id="output" style="margin-top:14px">Output will stream here…</pre>
+  </div>
+
+  <div class="card">
+    <p class="label"><span id="wsDot" class="dot off"></span>data/logs/ (live)</p>
+    <ul id="logList"><li class="meta">loading…</li></ul>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const output = $("output");
+const status = $("status");
+const askBtn = $("askBtn");
+
+async function checkSetup() {
+  try {
+    const r = await fetch("/api/health");
+    const j = await r.json();
+    if (!j.claude?.ok) {
+      const s = $("setup");
+      s.style.display = "block";
+      s.textContent = "⚠️ The `claude` CLI isn't available: " + (j.claude?.error || "unknown") +
+        ". Install Claude Code and log in (claude login), then reload.";
+      askBtn.disabled = true;
+    }
+  } catch (e) { /* server down; ignore */ }
+}
+
+async function loadLogs() {
+  try {
+    const r = await fetch("/api/logs");
+    const { logs } = await r.json();
+    const list = $("logList");
+    if (!logs.length) { list.innerHTML = '<li class="meta">No logs yet.</li>'; return; }
+    list.innerHTML = logs.map((l) => {
+      const fm = l.frontmatter || {};
+      const bits = [fm.hours != null ? fm.hours + "h" : null,
+                    Array.isArray(fm.tracks) && fm.tracks.length ? fm.tracks.join(", ") : null,
+                    fm.mood || null].filter(Boolean).join(" · ");
+      return `<li><strong>${l.file}</strong>${bits ? ` <span class="meta">— ${bits}</span>` : ""}</li>`;
+    }).join("");
+  } catch (e) {
+    $("logList").innerHTML = '<li class="meta">Failed to load logs.</li>';
+  }
+}
+
+let sessionId = null;
+askBtn.addEventListener("click", async () => {
+  askBtn.disabled = true;
+  status.textContent = "running…";
+  output.textContent = "";
+  try {
+    const res = await fetch("/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "appendTestLine", sessionId }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      output.textContent = "Error: " + (j.error || res.status);
+      return;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line);
+        renderEvent(ev);
+        if (ev.type === "done" && ev.sessionId) sessionId = ev.sessionId;
+      }
+    }
+    status.textContent = "done";
+  } catch (e) {
+    output.textContent = "Error: " + e.message;
+    status.textContent = "error";
+  } finally {
+    askBtn.disabled = false;
+  }
+});
+
+function renderEvent(ev) {
+  let line = "";
+  if (ev.type === "system" && ev.subtype === "init") line = `[session ${ev.session_id?.slice(0,8)}]`;
+  else if (ev.type === "assistant") {
+    const text = (ev.message?.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
+    const tools = (ev.message?.content || []).filter((c) => c.type === "tool_use").map((c) => `→ ${c.name}`).join(" ");
+    line = [text, tools].filter(Boolean).join(" ");
+  }
+  else if (ev.type === "result") line = `\n✓ ${ev.result || "done"}`;
+  else if (ev.type === "error") line = `\n✗ ${ev.message}`;
+  if (line) output.textContent += (output.textContent ? "\n" : "") + line;
+  output.scrollTop = output.scrollHeight;
+}
+
+// Live file watch
+function connectWS() {
+  const ws = new WebSocket(`ws://${location.host}/watch`);
+  ws.onopen = () => $("wsDot").classList.remove("off");
+  ws.onclose = () => { $("wsDot").classList.add("off"); setTimeout(connectWS, 1500); };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === "change") loadLogs();
+  };
+}
+
+checkSetup();
+loadLogs();
+connectWS();
+</script>
+</body>
+</html>

@@ -77,8 +77,42 @@ docs/         # spec, schema, architecture
 
 ## Commands
 
-No build tooling exists yet — commands are established per phase. Once scaffolded, expect:
-- Backend: `cd server && npm install && npm run dev`
-- UI: `cd app && npm install && npm run dev`
+**Backend (`server/`, built in Phase 1):**
+- `cd server && npm install` — install deps (express, ws, chokidar, gray-matter).
+- `npm run dev` — tsx watch, serves http://localhost:4317 (`ICM_PORT` overrides).
+- `npm run start` — run once without watch.
+- `npm run typecheck` — `tsc --noEmit`, no test runner yet.
 
-Update this section with the real build / dev / test / single-test commands as soon as Phase 1+ creates them.
+The bridge spawns the local `claude` CLI (no API key) — see [server/README.md](server/README.md) for the exact command and the `/ask`, `/api/logs`, `/api/health`, `/watch` endpoints.
+
+**UI (`app/`, built in Phase 2+):** not scaffolded yet — expect `cd app && npm install && npm run dev`.
+
+
+Instructions:
+
+
+You may autonomously:
+
+- Read and modify source code
+- Create files and folders
+- Install dependencies
+- Run builds and tests
+- Fix linting and type errors
+- Refactor code
+
+You must NOT:
+
+- Deploy to production
+- Migrations, edge function deployments to both test and prod
+- Push to git
+- Create commits
+- Create pull requests
+- Modify production databases
+- Delete user data
+- Change infrastructure
+
+For any action above, stop and ask for approval.
+
+Other than the above you don't need any approval you are free to continue without firing the approval
+
+Assume a development environment unless explicitly told otherwise.
