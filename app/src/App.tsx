@@ -18,7 +18,6 @@ export default function App() {
   const [stage, setStage] = useState<Stage>("setup");
   const [role, setRole] = useState("");
   const [level, setLevel] = useState("mid");
-  const [voiceOn, setVoiceOn] = useState(true);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,8 +30,6 @@ export default function App() {
   const [hasResume, setHasResume] = useState(false);
 
   const voice = useVoice();
-  const voiceOnRef = useRef(true);
-  voiceOnRef.current = voiceOn;
   const sessionId = useRef<string | null>(null);
   const startedAt = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,7 +74,7 @@ export default function App() {
               n[n.length - 1] = { role: "interviewer", text: (n[n.length - 1].text + " " + text).trim() };
               return n;
             });
-            if (voiceOnRef.current) voice.speak(text);
+            if (voice.supported) voice.speak(text);
           }
         }
       });
@@ -93,7 +90,7 @@ export default function App() {
   };
 
   const listenForReply = () => {
-    if (!voiceOnRef.current || !voice.supported) return;
+    if (!voice.supported) return;
     setInterim("");
     voice.listen(
       (finalText) => {
@@ -105,6 +102,7 @@ export default function App() {
   };
 
   const start = async () => {
+    voice.unlock(); // must run inside the click gesture so audio can play
     setStage("live");
     setTurns([]);
     sessionId.current = null;
@@ -194,12 +192,34 @@ export default function App() {
               </div>
             </div>
 
-            <label className="flex items-center gap-2.5 text-sm text-soft">
-              <input type="checkbox" checked={voiceOn} onChange={(e) => setVoiceOn(e.target.checked)} className="accent-violet" />
-              <Mic size={15} className={voice.supported ? "text-violet2" : "text-faint"} />
-              Voice interview (interviewer speaks; you answer out loud)
-              {!voice.supported && <span className="text-faint text-xs">— not supported in this browser</span>}
-            </label>
+            <div>
+              <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">3 · Interviewer voice</label>
+              {voice.supported ? (
+                <div className="flex items-center gap-2">
+                  <Mic size={15} className="text-violet2 shrink-0" />
+                  <select
+                    value={voice.voiceName}
+                    onChange={(e) => voice.setVoice(e.target.value)}
+                    className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
+                  >
+                    {voice.voices
+                      .filter((v) => v.lang?.toLowerCase().startsWith("en"))
+                      .map((v) => (
+                        <option key={v.name} value={v.name} className="bg-panel">
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-faint text-sm">
+                  This browser has no speech support — the interview will run as text. Try Chrome or Safari.
+                </p>
+              )}
+              <p className="text-faint text-xs mt-1.5">
+                Spoken interview — the voice starts automatically once you begin.
+              </p>
+            </div>
 
             <button
               onClick={start}
@@ -238,23 +258,12 @@ export default function App() {
       <div className="flex items-center gap-3 mb-4">
         <span className="text-bright font-semibold">{role || "Interview"} · {level}</span>
         <span className="font-mono text-lg text-violet2 tabular-nums">{mm}:{ss}</span>
-        {voice.speaking && <Volume2 size={16} className="text-teal animate-pulse" />}
-        {voice.supported && (
-          <button
-            onClick={() => {
-              const next = !voiceOn;
-              setVoiceOn(next);
-              if (!next) {
-                voice.cancelSpeak();
-                voice.stopListen();
-              } else listenForReply();
-            }}
-            className={`ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${voiceOn ? "border-teal text-teal" : "border-edge2 text-soft"}`}
-          >
-            <Mic size={14} /> {voiceOn ? "Voice on" : "Voice off"}
-          </button>
+        {voice.speaking && (
+          <span className="flex items-center gap-1.5 text-teal text-sm">
+            <Volume2 size={15} className="animate-pulse" /> speaking
+          </span>
         )}
-        <button onClick={endAndScore} disabled={busy} className={`${voice.supported ? "" : "ml-auto"} flex items-center gap-1.5 rounded-lg bg-teal px-3 py-1.5 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50`}>
+        <button onClick={endAndScore} disabled={busy} className="ml-auto flex items-center gap-1.5 rounded-lg bg-teal px-3 py-1.5 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50">
           <Square size={14} /> End &amp; score
         </button>
       </div>
