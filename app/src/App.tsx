@@ -104,6 +104,13 @@ export default function App() {
     );
   };
 
+  // Preview the selected voice on the setup screen (explicit click = gesture).
+  const testVoice = () => {
+    voice.unlock();
+    voice.cancelSpeak();
+    voice.speak("Hi, I'm your interviewer today. When you're ready, tell me a little about yourself.");
+  };
+
   const start = async () => {
     voice.unlock(); // must run inside the click gesture so audio can play
     setStage("live");
@@ -203,7 +210,10 @@ export default function App() {
                 <Volume2 size={15} className="text-violet2 shrink-0" />
                 <select
                   value={voice.voiceName}
-                  onChange={(e) => voice.setVoice(e.target.value)}
+                  onChange={(e) => {
+                    voice.setVoice(e.target.value);
+                    voice.cancelSpeak();
+                  }}
                   className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
                 >
                   {voice.voices.map((v) => (
@@ -212,6 +222,23 @@ export default function App() {
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => (voice.speaking ? voice.cancelSpeak() : testVoice())}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm shrink-0 ${
+                    voice.speaking ? "border-teal text-teal" : "border-edge2 text-soft hover:border-violet"
+                  }`}
+                >
+                  {voice.speaking ? (
+                    <>
+                      <Square size={13} /> Stop
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 size={14} /> Test
+                    </>
+                  )}
+                </button>
               </div>
               <p className="text-faint text-xs mt-1.5">
                 Realistic neural voice (Kokoro, runs locally). It starts automatically once you begin.
