@@ -1,15 +1,9 @@
-// Thin client over the local backend bridge. Every AI action is a POST /ask.
+// Thin client over the local interview backend. Every AI action is a POST /ask.
 
 export type ClaudeEvent = Record<string, unknown> & { type?: string };
 
-export interface LogEntry {
+export interface CollectionItem {
   file: string;
-  frontmatter: Record<string, unknown>;
-}
-
-export interface FileResult {
-  path: string;
-  raw: string;
   frontmatter: Record<string, unknown>;
   content: string;
 }
@@ -69,130 +63,47 @@ export async function askStream(
   return { sessionId, result };
 }
 
-/** Extract human-readable text from an assistant stream event. */
-export function eventText(ev: ClaudeEvent): { text: string; tools: string[] } {
-  if (ev.type !== "assistant") return { text: "", tools: [] };
+/** Plain text from an assistant stream event. */
+export function eventText(ev: ClaudeEvent): string {
+  if (ev.type !== "assistant") return "";
   const content = (ev as any).message?.content ?? [];
-  const text = content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
-  const tools = content.filter((c: any) => c.type === "tool_use").map((c: any) => c.name as string);
-  return { text, tools };
-}
-
-export async function fetchLogs(): Promise<LogEntry[]> {
-  const r = await fetch("/api/logs");
-  const j = await r.json();
-  return j.logs ?? [];
-}
-
-export async function readFile(path: string): Promise<FileResult | null> {
-  const r = await fetch(`/api/file?path=${encodeURIComponent(path)}`);
-  if (!r.ok) return null;
-  return r.json();
-}
-
-export interface CollectionItem {
-  file: string;
-  frontmatter: Record<string, unknown>;
-  content: string;
+  return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
 }
 
 export async function fetchCollection(dir: string): Promise<CollectionItem[]> {
   const r = await fetch(`/api/collection?dir=${encodeURIComponent(dir)}`);
   if (!r.ok) return [];
-  const j = await r.json();
-  return j.items ?? [];
+  return (await r.json()).items ?? [];
 }
 
-async function postJson(url: string, body: unknown): Promise<any> {
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
-  return j;
+export interface Health {
+  ok: boolean;
+  error?: string;
+  hasResume: boolean;
 }
 
-/** Atomic deterministic write (milestone toggles, etc.). */
-export function writeFile(path: string, content: string): Promise<any> {
-  return postJson("/api/write", { path, content });
-}
-
-export interface NewGoal {
-  title: string;
-  north_star: string;
-  target_date: string;
-  hours_per_week: number;
-  milestones?: string[];
-}
-
-export function createGoal(goal: NewGoal): Promise<{ id: string; path: string }> {
-  return postJson("/api/goals", goal);
-}
-
-export function patchRoadmapNode(
-  path: string,
-  index: number,
-  patch: Record<string, unknown>,
-): Promise<any> {
-  return postJson("/api/roadmap-node", { path, index, patch });
-}
-
-export async function checkHealth(): Promise<{ ok: boolean; error?: string }> {
+export async function checkHealth(): Promise<Health> {
   try {
     const r = await fetch("/api/health");
     const j = await r.json();
-    return j.claude ?? { ok: false };
+    return { ok: j.claude?.ok ?? false, error: j.claude?.error, hasResume: !!j.hasResume };
   } catch (e) {
-    return { ok: false, error: (e as Error).message };
+    return { ok: false, error: (e as Error).message, hasResume: false };
   }
+}
+
+/** Upload a resume (PDF/DOCX/txt) — parsed server-side into data/resume.md. */
+export async function uploadResume(file: File): Promise<{ filename: string; chars: number }> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch("/api/resume", { method: "POST", body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Upload failed (${r.status})`);
+  return j;
 }
 
 /** Today's date as YYYY-MM-DD (local). */
 export function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/** ISO week id like 2026-W25 for a date (default now). */
-export function isoWeek(date = new Date()): string {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dayNum + 3);
-  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const week =
-    1 +
-    Math.round(
-      ((d.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7,
-    );
-  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
-}
-
-export interface ScheduleBlock {
-  id: string;
-  day: string;
-  topic: string;
-  start?: string;
-  end?: string;
-  planned_min: number;
-  actual_min: number;
-}
-
-type BlockOp =
-  | { op: "add"; block: Partial<ScheduleBlock> }
-  | { op: "update"; id: string; patch: Partial<ScheduleBlock> }
-  | { op: "delete"; id: string }
-  | { op: "log"; id: string; minutes: number };
-
-export function scheduleBlock(week: string, args: BlockOp): Promise<{ blocks: ScheduleBlock[] }> {
-  return postJson("/api/schedule/block", { week, ...args });
-}
-
-export function rateReview(id: string, confidence: number): Promise<any> {
-  return postJson("/api/review/rate", { id, confidence });
-}
-
-export function createReview(card: { topic: string; prompt: string; solution: string }): Promise<any> {
-  return postJson("/api/reviews", card);
 }

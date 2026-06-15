@@ -1,229 +1,71 @@
 /**
- * All Claude prompts live here so they are easy to tune (spec section 4).
- * Every "AI action" in the UI is a POST /ask with one of these prompts.
+ * All Claude prompts for the mock-interview app live here (spec section 4).
+ * The interview reads the candidate's uploaded resume (data/resume.md) and
+ * mixes resume-specific questions with common top interview questions.
  */
 
+/** A seed bank of common top interview questions, woven in alongside resume Qs. */
+export const TOP_QUESTIONS = [
+  "Tell me about yourself.",
+  "Walk me through a project you're most proud of.",
+  "Tell me about a time you faced a hard technical problem and how you solved it.",
+  "Describe a conflict on a team and how you handled it.",
+  "What's a weakness you're actively working on?",
+  "Why do you want this role, and why now?",
+  "Tell me about a time you failed or shipped a bug — what did you learn?",
+  "How do you make a decision when requirements are ambiguous?",
+];
+
 /**
- * Phase 1 smoke test: append a single timestamped line to today's daily log,
- * honoring the append-only + frontmatter rules from docs/data-schema.md.
+ * Interviewer kickoff (new session). Voice-first: keep turns short and
+ * conversational since they're spoken aloud.
  */
-export function appendTestLine(date: string): string {
+export function mockInterviewer(role: string, level: string): string {
+  const roleLine = role.trim()
+    ? `The candidate is interviewing for: ${role.trim()} (${level} level).`
+    : `Infer the most likely target role from the resume; treat it as a ${level}-level interview.`;
   return [
-    `Append a single test line to today's daily log at data/logs/${date}.md.`,
+    `You are a friendly but rigorous interviewer at a strong company, running a`,
+    `realistic spoken mock interview. Stay fully in character the whole session.`,
+    ``,
+    `FIRST, read the candidate's resume at data/resume.md. ${roleLine}`,
+    ``,
+    `Run a realistic interview that MIXES two kinds of questions:`,
+    `1) Resume-specific questions — dig into their actual projects, choices,`,
+    `   impact, and any gaps you notice.`,
+    `2) Common top interview questions for this role (behavioral + role/technical),`,
+    `   e.g.: ${TOP_QUESTIONS.slice(0, 5).join(" / ")}`,
     ``,
     `Rules:`,
-    `- If the file does not exist, create it with valid YAML frontmatter:`,
-    `  date: ${date}, hours: 0, tracks: [], mood: focused — then a "## What I did" section.`,
-    `- The log is APPEND-ONLY. Never rewrite, reorder, or reformat existing content.`,
-    `- Under "## What I did", append exactly one new bullet:`,
-    `  "- AI bridge test line (${date})".`,
-    `- Make no other changes and touch no other files.`,
-    `- Reply with one short sentence confirming what you appended.`,
+    `- This is SPOKEN. Keep every turn short and natural — 1–3 sentences, ONE`,
+    `  question at a time, then stop and wait for the answer. No long monologues,`,
+    `  no markdown, no bullet lists.`,
+    `- Open by briefly introducing yourself, then ask the candidate to tell you`,
+    `  about themselves. React to their actual answers and ask natural follow-ups.`,
+    `- Probe when answers are vague; reward specifics. Don't reveal scores or a`,
+    `  rubric during the interview, and do NOT write any files yet.`,
+    ``,
+    `Begin now with your short intro and first question.`,
   ].join("\n");
 }
 
-/**
- * AI-Engineer question bank for mock interviews (spec Phase 6a).
- */
-export const MOCK_BANK: Record<string, string[]> = {
-  rag: [
-    "Design a RAG system for a company's internal docs. Walk me through retrieval, chunking, and how you'd keep answers grounded.",
-    "Our RAG app returns confident but wrong answers. How do you debug and fix retrieval quality?",
-  ],
-  evals: [
-    "Design an evaluation harness for an LLM feature you've shipped. What do you measure and how?",
-    "How would you detect and measure hallucination in a production LLM product?",
-  ],
-  agents: [
-    "Design an agent that books travel end-to-end. How do you structure tools, planning, and error recovery?",
-    "Your tool-using agent loops or calls the wrong tool. How do you make it reliable?",
-  ],
-  "llm-serving": [
-    "Walk me through serving a 7B model to 1000 concurrent users with low latency. Where are the bottlenecks?",
-    "Explain KV-cache, batching, and quantization trade-offs for LLM inference.",
-  ],
-  fundamentals: [
-    "Explain attention and why transformers replaced RNNs for sequence modeling.",
-    "What is the difference between fine-tuning, LoRA, and prompting? When would you choose each?",
-  ],
-  dsa: [
-    "Given a list of strings, group anagrams together. Talk me through your approach, then code it.",
-    "Find the k most frequent elements in an array. Optimize for time and space.",
-  ],
-};
-
-/** Build the interviewer kickoff prompt (new session). */
-export function mockInterviewer(type: string, level: string, question: string): string {
+/** Wrap + score the interview honestly, writing a rubric file (resumed session). */
+export function mockScore(role: string, level: string, date: string): string {
+  const slug = (role.trim() || "interview").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   return [
-    `You are a senior AI-Engineer interviewer at a strong product company,`,
-    `running a realistic ${level} mock interview (track: ${type}). Stay fully in`,
-    `character as the interviewer for the whole session.`,
+    `The interview is over. Step out of character and grade it HONESTLY and`,
+    `specifically — be fair, not generous.`,
     ``,
-    `Conduct it in phases, ONE step at a time, waiting for the candidate each`,
-    `time: intro → clarify → approach → coding → testing → follow-ups → wrap.`,
-    `Rules:`,
-    `- Withhold constraints up front; reveal them only if the candidate asks good`,
-    `  clarifying questions (reward that).`,
-    `- Give graduated hints only when the candidate is stuck — nudge, don't solve.`,
-    `- When code is relevant, the candidate's current code is included in their`,
-    `  messages as a fenced block; read it and react to what's actually there.`,
-    `- Keep each turn short and conversational, like a real interviewer. Never`,
-    `  reveal the full model solution or a rubric during the interview.`,
-    `- Do NOT write any files yet.`,
+    `Write the assessment to a new file mocks/${date}-${slug}-<n>.md (pick a short`,
+    `unique suffix <n> so you never overwrite an existing mock). Frontmatter:`,
+    `type: "${role.trim() || "general"}", level: ${level}, date: ${date}, verdict`,
+    `(one honest line), and a rubric with FOUR 1–4 scores: communication,`,
+    `depth, problem_solving, confidence.`,
+    `Body: a "## Summary" of how it went and a "## Evidence notes" section citing`,
+    `specific answers that justify each score, plus the single most useful thing`,
+    `to improve.`,
     ``,
-    `Begin now: give a one-line intro and pose this question, then stop and wait:`,
-    `"${question}"`,
-  ].join("\n");
-}
-
-/** Wrap + score the interview, writing an honest rubric file (resumed session). */
-export function mockScore(type: string, level: string, date: string): string {
-  return [
-    `The interview is over. Step out of character and grade it HONESTLY — be`,
-    `fair, not generous; a real bar.`,
-    ``,
-    `Write the assessment to a new file mocks/${date}-${type}-<n>.md (pick a short`,
-    `unique suffix <n> so you never overwrite an existing mock), following`,
-    `docs/data-schema.md. Frontmatter: type: ${type}, level: ${level}, date:`,
-    `${date}, verdict (one honest line), and rubric with FOUR scores from 1–4:`,
-    `problem_solving, technical_depth, communication, code_quality.`,
-    `Body: a "## Transcript" summary and a "## Evidence notes" section citing`,
-    `specific moments that justify each score.`,
-    ``,
-    `Write only that one file. Then reply to the candidate with the verdict and`,
-    `the four scores, plus the single most useful thing to improve.`,
-  ].join("\n");
-}
-
-/**
- * Diary: turn a raw, messy note into a clean dated daily-log entry.
- * Append-only, honoring docs/data-schema.md.
- */
-export function writeDiaryLog(date: string, note: string): string {
-  return [
-    `The user wrote this raw diary note for today (${date}):`,
-    `"""`,
-    note,
-    `"""`,
-    ``,
-    `Turn it into a clean entry in today's daily log at data/logs/${date}.md,`,
-    `following docs/data-schema.md. Rules:`,
-    `- If the file does not exist, create it with valid YAML frontmatter`,
-    `  (date: ${date}, hours, tracks, mood) and "## What I did" /`,
-    `  "## Weak / flagged" sections.`,
-    `- The log is APPEND-ONLY: never rewrite, reorder, or reformat existing`,
-    `  content. Only append new bullets under the right section.`,
-    `- Rewrite the note into concise, well-phrased bullets under "## What I did".`,
-    `- Put anything the user struggled with or flagged under "## Weak / flagged".`,
-    `- If the note mentions hours studied, set/raise frontmatter "hours"; infer`,
-    `  "tracks" (e.g. dsa, rag, evals, agents) and "mood" when clear. Never lower`,
-    `  existing hours.`,
-    `- Do not invent facts that are not in the note.`,
-    `- Touch only this one file. Reply with one short sentence summarizing what`,
-    `  you logged.`,
-  ].join("\n");
-}
-
-/**
- * Draft a learning roadmap for a goal, written as editable nodes in
- * roadmaps/<goalId>.md per docs/data-schema.md.
- */
-export function suggestRoadmap(goalId: string): string {
-  return [
-    `Read the goal at goals/${goalId}.md (its north_star, target_date, and`,
-    `hours_per_week). Draft a learning roadmap and write it to`,
-    `roadmaps/${goalId}.md following docs/data-schema.md.`,
-    ``,
-    `Frontmatter must include: id: ${goalId}, a human title, goal: ${goalId},`,
-    `and a YAML "nodes:" list. Each node has: title, status (set every node to`,
-    `"pending"), objective, checkpoint, est_hours (a number), and optional`,
-    `depends_on (a list of earlier node titles).`,
-    ``,
-    `Produce 8–14 nodes ordered from fundamentals to advanced, tailored to the`,
-    `goal's north star and realistic for the weekly hours before the target date.`,
-    `If roadmaps/${goalId}.md already exists, overwrite it with a fresh draft`,
-    `(roadmaps are editable drafts, not append-only).`,
-    `Write only that one file. Reply with one sentence stating how many nodes.`,
-  ].join("\n");
-}
-
-/**
- * Generate spaced-repetition review cards from a goal's weak areas / roadmap,
- * one markdown file each under data/reviews/ per docs/data-schema.md.
- */
-export function suggestReviewCards(goalId: string, count: number): string {
-  return [
-    `Create ${count} spaced-repetition review cards for goal ${goalId}.`,
-    ``,
-    `Read goals/${goalId}.md and roadmaps/${goalId}.md if present, plus the most`,
-    `recent daily logs in data/logs/ — pay attention to anything under`,
-    `"Weak / flagged". Choose ${count} of the most valuable, interview-relevant`,
-    `topics (RAG, evals, agents, LLM serving, fundamentals, DSA).`,
-    ``,
-    `For EACH card, create a new file data/reviews/<slug>.md following`,
-    `docs/data-schema.md, with frontmatter: id (the slug), topic, status: yellow,`,
-    `last_reviewed: "" (empty), interval_days: 1, confidence: 0. Body has a`,
-    `"## Prompt" section (a sharp interview-style question) and a`,
-    `"## Solution (hidden until attempted)" section (a concise correct answer).`,
-    ``,
-    `Use distinct slugs so you never overwrite an existing card. Create only`,
-    `files under data/reviews/. Reply with one sentence stating how many cards.`,
-  ].join("\n");
-}
-
-/**
- * Backward-plan a week of time-blocks from the goal's roadmap + weekly hours,
- * written to schedule/<week>.md per docs/data-schema.md.
- */
-export function planWeek(goalId: string, week: string, todayDate: string): string {
-  return [
-    `Plan a realistic week of study time-blocks for goal ${goalId}, for ISO`,
-    `week ${week} (today is ${todayDate}).`,
-    ``,
-    `First read goals/${goalId}.md (hours_per_week, target_date) and, if it`,
-    `exists, roadmaps/${goalId}.md (the in-progress and pending nodes). Then`,
-    `write schedule/${week}.md following docs/data-schema.md.`,
-    ``,
-    `Frontmatter must have: week: ${week}, and a "blocks:" YAML list. Each block:`,
-    `id (short unique string), day (Mon..Sun), topic (tie to a roadmap node when`,
-    `possible), start and end ("HH:MM", 24h), planned_min (number), actual_min: 0.`,
-    ``,
-    `Rules:`,
-    `- Total planned minutes ≈ the goal's hours_per_week.`,
-    `- Backward-plan from the target_date: prioritize in-progress then pending`,
-    `  nodes; add a 20% buffer and include at least one review block.`,
-    `- Spread blocks across days realistically (evenings on weekdays, longer on`,
-    `  weekends); avoid scheduling in the past relative to today.`,
-    `- If schedule/${week}.md already exists, overwrite it with the new plan`,
-    `  (schedules are editable drafts).`,
-    `Write only that one file. Reply with one sentence stating total planned hours.`,
-  ].join("\n");
-}
-
-/**
- * Parse a course (name/link/syllabus) into roadmap nodes and merge them into
- * roadmaps/<goalId>.md without dropping existing nodes.
- */
-export function ingestCourse(goalId: string, name: string, link: string, syllabus: string): string {
-  return [
-    `The user wants to ingest a course into their roadmap for goal ${goalId}.`,
-    `Course name: ${name || "(none given)"}.`,
-    `Link: ${link || "(none given)"}.`,
-    `Syllabus / notes:`,
-    `"""`,
-    syllabus || "(none provided — infer a reasonable module list from the name/link)",
-    `"""`,
-    ``,
-    `Parse this into roadmap nodes and merge them into roadmaps/${goalId}.md,`,
-    `following docs/data-schema.md:`,
-    `- If the file does not exist, create it (id: ${goalId}, goal: ${goalId},`,
-    `  title, nodes: []) first.`,
-    `- APPEND the new nodes to the existing "nodes:" list. Never remove or`,
-    `  reorder existing nodes.`,
-    `- Each new node: title (concise), status: pending, objective, checkpoint,`,
-    `  est_hours. Group the course into coherent modules rather than one node per`,
-    `  lecture.`,
-    `Write only that one file. Reply with one sentence stating how many nodes you`,
-    `added.`,
+    `Write only that one file. Then reply to the candidate, out loud and warm,`,
+    `with the verdict, the four scores, and that one improvement (2–4 sentences).`,
   ].join("\n");
 }

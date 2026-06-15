@@ -26,17 +26,19 @@ requires it, swap the spawn in `src/claude.ts` for the Agent SDK but keep the
 
 ## Endpoints
 
-- `POST /ask` — body `{ action?, prompt?, sessionId? }`. Provide a named
-  `action` (resolved from `src/prompts.ts`) or a raw `prompt`. Streams
-  newline-delimited JSON (`application/x-ndjson`): each line is a `claude`
-  stream-json event, followed by a final `{ type: "done", sessionId, result }`.
-  Only one AI action runs at a time (returns `409` if busy) to avoid concurrent
-  file edits.
-- `GET /api/logs` — daily logs in `data/logs/` with parsed frontmatter.
-- `GET /api/health` — reports whether the `claude` CLI is installed.
-- `ws://<host>/watch` — WebSocket; broadcasts `{ type: "change", event, path }`
-  whenever a file under `data/ goals/ roadmaps/ schedule/ mocks/` changes
-  (`data/index.json` is ignored).
+- `POST /ask` — body `{ action?, prompt?, params?, sessionId? }`. Provide a
+  named `action` (`startMock` / `scoreMock`, resolved from `src/prompts.ts`) or a
+  raw `prompt` (used for each candidate turn, with `sessionId` to resume the
+  interview). Streams newline-delimited JSON (`application/x-ndjson`): each line
+  is a `claude` stream-json event, then a final `{ type: "done", sessionId,
+  result }`. One run at a time (returns `409` if busy).
+- `POST /api/resume` — multipart upload (field `file`); parses a PDF/DOCX/TXT
+  resume to text and saves `data/resume.md`.
+- `GET /api/health` — `{ claude: {ok}, hasResume }`.
+- `GET /api/file?path=` — read a data file. `GET /api/collection?dir=mocks` —
+  list scored mocks (score trend).
+- `ws://<host>/watch` — broadcasts `{ type: "change", event, path }` when a file
+  under `data/` or `mocks/` changes.
 
 ## Run
 

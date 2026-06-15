@@ -13,6 +13,9 @@ server/dist/
 # Generated cache (per spec section 5: derived/cache is git-ignored)
 data/index.json
 
+# The uploaded resume is personal data — never commit it
+data/resume.md
+
 # Tauri (Phase 7)
 src-tauri/target/
 

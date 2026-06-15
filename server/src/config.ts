@@ -11,8 +11,8 @@ export const REPO_ROOT = path.resolve(__dirname, "..", "..");
 
 export const PORT = Number(process.env.ICM_PORT ?? 4317);
 
-/** Directories watched for live UI updates (spec section 4). */
-export const WATCH_DIRS = ["data", "goals", "roadmaps", "schedule", "mocks"];
+/** Directories watched for live UI updates. */
+export const WATCH_DIRS = ["data", "mocks"];
 
 export const LOGS_DIR = path.join(REPO_ROOT, "data", "logs");
 
