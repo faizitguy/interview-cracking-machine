@@ -16,6 +16,9 @@ import {
   ingestCourse,
   planWeek,
   suggestReviewCards,
+  mockInterviewer,
+  mockScore,
+  MOCK_BANK,
 } from "./prompts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
@@ -28,6 +31,14 @@ const ACTIONS: Record<string, Action> = {
     ingestCourse(String(p.goalId ?? ""), String(p.name ?? ""), String(p.link ?? ""), String(p.syllabus ?? "")),
   planWeek: (p) => planWeek(String(p.goalId ?? ""), String(p.week ?? isoWeek()), today()),
   suggestReviewCards: (p) => suggestReviewCards(String(p.goalId ?? ""), Number(p.count ?? 6)),
+  startMock: (p) => {
+    const type = String(p.type ?? "rag");
+    const level = String(p.level ?? "mid");
+    const bank = MOCK_BANK[type] ?? MOCK_BANK.rag;
+    const q = bank[Math.floor(Math.random() * bank.length)];
+    return mockInterviewer(type, level, q);
+  },
+  scoreMock: (p) => mockScore(String(p.type ?? "rag"), String(p.level ?? "mid"), today()),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

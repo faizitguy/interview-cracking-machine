@@ -26,6 +26,6 @@ export const NAV: NavItem[] = [
   { id: "goals", label: "Goals", icon: Target },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
   { id: "review", label: "Review", icon: RefreshCw },
-  { id: "mock", label: "Mock", icon: MessageSquare, placeholder: true, phase: 6 },
+  { id: "mock", label: "Mock", icon: MessageSquare },
   { id: "stats", label: "Stats", icon: BarChart3 },
 ];

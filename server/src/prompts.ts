@@ -23,6 +23,79 @@ export function appendTestLine(date: string): string {
 }
 
 /**
+ * AI-Engineer question bank for mock interviews (spec Phase 6a).
+ */
+export const MOCK_BANK: Record<string, string[]> = {
+  rag: [
+    "Design a RAG system for a company's internal docs. Walk me through retrieval, chunking, and how you'd keep answers grounded.",
+    "Our RAG app returns confident but wrong answers. How do you debug and fix retrieval quality?",
+  ],
+  evals: [
+    "Design an evaluation harness for an LLM feature you've shipped. What do you measure and how?",
+    "How would you detect and measure hallucination in a production LLM product?",
+  ],
+  agents: [
+    "Design an agent that books travel end-to-end. How do you structure tools, planning, and error recovery?",
+    "Your tool-using agent loops or calls the wrong tool. How do you make it reliable?",
+  ],
+  "llm-serving": [
+    "Walk me through serving a 7B model to 1000 concurrent users with low latency. Where are the bottlenecks?",
+    "Explain KV-cache, batching, and quantization trade-offs for LLM inference.",
+  ],
+  fundamentals: [
+    "Explain attention and why transformers replaced RNNs for sequence modeling.",
+    "What is the difference between fine-tuning, LoRA, and prompting? When would you choose each?",
+  ],
+  dsa: [
+    "Given a list of strings, group anagrams together. Talk me through your approach, then code it.",
+    "Find the k most frequent elements in an array. Optimize for time and space.",
+  ],
+};
+
+/** Build the interviewer kickoff prompt (new session). */
+export function mockInterviewer(type: string, level: string, question: string): string {
+  return [
+    `You are a senior AI-Engineer interviewer at a strong product company,`,
+    `running a realistic ${level} mock interview (track: ${type}). Stay fully in`,
+    `character as the interviewer for the whole session.`,
+    ``,
+    `Conduct it in phases, ONE step at a time, waiting for the candidate each`,
+    `time: intro → clarify → approach → coding → testing → follow-ups → wrap.`,
+    `Rules:`,
+    `- Withhold constraints up front; reveal them only if the candidate asks good`,
+    `  clarifying questions (reward that).`,
+    `- Give graduated hints only when the candidate is stuck — nudge, don't solve.`,
+    `- When code is relevant, the candidate's current code is included in their`,
+    `  messages as a fenced block; read it and react to what's actually there.`,
+    `- Keep each turn short and conversational, like a real interviewer. Never`,
+    `  reveal the full model solution or a rubric during the interview.`,
+    `- Do NOT write any files yet.`,
+    ``,
+    `Begin now: give a one-line intro and pose this question, then stop and wait:`,
+    `"${question}"`,
+  ].join("\n");
+}
+
+/** Wrap + score the interview, writing an honest rubric file (resumed session). */
+export function mockScore(type: string, level: string, date: string): string {
+  return [
+    `The interview is over. Step out of character and grade it HONESTLY — be`,
+    `fair, not generous; a real bar.`,
+    ``,
+    `Write the assessment to a new file mocks/${date}-${type}-<n>.md (pick a short`,
+    `unique suffix <n> so you never overwrite an existing mock), following`,
+    `docs/data-schema.md. Frontmatter: type: ${type}, level: ${level}, date:`,
+    `${date}, verdict (one honest line), and rubric with FOUR scores from 1–4:`,
+    `problem_solving, technical_depth, communication, code_quality.`,
+    `Body: a "## Transcript" summary and a "## Evidence notes" section citing`,
+    `specific moments that justify each score.`,
+    ``,
+    `Write only that one file. Then reply to the candidate with the verdict and`,
+    `the four scores, plus the single most useful thing to improve.`,
+  ].join("\n");
+}
+
+/**
  * Diary: turn a raw, messy note into a clean dated daily-log entry.
  * Append-only, honoring docs/data-schema.md.
  */
