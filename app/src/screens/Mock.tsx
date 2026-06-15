@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Send, Loader2, Square, Code2, Trophy } from "lucide-react";
+import { Play, Send, Loader2, Square, Code2, Trophy, Mic, Volume2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { askStream, eventText, fetchCollection, type ClaudeEvent, type CollectionItem } from "../lib/api";
+import { useVoice } from "../lib/useVoice";
 
 const TYPES = ["rag", "evals", "agents", "llm-serving", "fundamentals", "dsa"];
 const LEVELS = ["junior", "mid", "senior"];
@@ -24,9 +25,14 @@ export default function Mock({ rev }: { rev: number }) {
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [mocks, setMocks] = useState<CollectionItem[]>([]);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [interim, setInterim] = useState("");
   const sessionId = useRef<string | null>(null);
   const startedAt = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useVoice();
+  const voiceOnRef = useRef(false);
+  voiceOnRef.current = voiceOn;
 
   useEffect(() => {
     fetchCollection("mocks").then(setMocks);
@@ -50,12 +56,14 @@ export default function Mock({ rev }: { rev: number }) {
         if (ev.type === "system" && (ev as any).session_id) sessionId.current = (ev as any).session_id;
         if (ev.type === "assistant") {
           const { text } = eventText(ev);
-          if (text)
+          if (text) {
             setTurns((t) => {
               const n = [...t];
               n[n.length - 1] = { role: "interviewer", text: (n[n.length - 1].text + " " + text).trim() };
               return n;
             });
+            if (voiceOnRef.current) voice.speak(text); // stream chunks into TTS
+          }
         }
       });
     } catch (e) {
@@ -69,6 +77,19 @@ export default function Mock({ rev }: { rev: number }) {
     }
   };
 
+  // After the interviewer finishes a turn, if voice is on, listen for the reply.
+  const listenForReply = () => {
+    if (!voiceOnRef.current || !voice.supported) return;
+    setInterim("");
+    voice.listen(
+      (finalText) => {
+        setInterim("");
+        send(finalText);
+      },
+      (i) => setInterim(i),
+    );
+  };
+
   const start = async () => {
     setStage("live");
     setTurns([]);
@@ -76,15 +97,17 @@ export default function Mock({ rev }: { rev: number }) {
     startedAt.current = Date.now();
     setElapsed(0);
     await streamInto({ action: "startMock", params: { type, level } });
+    listenForReply();
   };
 
-  const send = async () => {
-    const msg = input.trim();
+  const send = async (textArg?: string) => {
+    const msg = (textArg ?? input).trim();
     if (!msg || busy) return;
     setInput("");
     const composed = code.trim() ? `${msg}\n\nMy current code:\n\`\`\`\n${code}\n\`\`\`` : msg;
     setTurns((t) => [...t, { role: "candidate", text: msg }]);
     await streamInto({ prompt: composed, sessionId: sessionId.current });
+    listenForReply();
   };
 
   const endAndScore = async () => {
@@ -173,7 +196,23 @@ export default function Mock({ rev }: { rev: number }) {
       <div className="flex items-center gap-3 mb-3">
         <span className="text-bright font-semibold">{type} · {level}</span>
         <span className="font-mono text-lg text-violet2 tabular-nums">{mm}:{ss}</span>
-        <button onClick={() => setShowCode((s) => !s)} className={`ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${showCode ? "border-violet text-violet2" : "border-edge2 text-soft"}`}>
+        {voice.speaking && <Volume2 size={15} className="text-teal animate-pulse" />}
+        {voice.supported && (
+          <button
+            onClick={() => {
+              const next = !voiceOn;
+              setVoiceOn(next);
+              if (!next) {
+                voice.cancelSpeak();
+                voice.stopListen();
+              } else listenForReply();
+            }}
+            className={`ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${voiceOn ? "border-teal text-teal" : "border-edge2 text-soft"}`}
+          >
+            <Mic size={14} /> {voiceOn ? "Voice on" : "Voice"}
+          </button>
+        )}
+        <button onClick={() => setShowCode((s) => !s)} className={`${voice.supported ? "" : "ml-auto"} flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${showCode ? "border-violet text-violet2" : "border-edge2 text-soft"}`}>
           <Code2 size={14} /> Code
         </button>
         <button onClick={endAndScore} disabled={busy} className="flex items-center gap-1.5 rounded-lg bg-teal px-3 py-1.5 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50">
@@ -201,7 +240,22 @@ export default function Mock({ rev }: { rev: number }) {
         )}
       </div>
 
-      <div className="mt-4 flex gap-2">
+      {(voice.listening || interim) && (
+        <p className="mt-3 text-sm text-teal">
+          <Mic size={13} className="inline mr-1.5 animate-pulse" />
+          {interim || "Listening…"}
+        </p>
+      )}
+      <div className="mt-3 flex gap-2">
+        {voice.supported && (
+          <button
+            onClick={() => (voice.listening ? voice.stopListen() : listenForReply())}
+            title="Push to talk (interrupts the interviewer)"
+            className={`rounded-lg border px-3 ${voice.listening ? "border-teal text-teal" : "border-edge2 text-soft"}`}
+          >
+            <Mic size={16} />
+          </button>
+        )}
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -210,7 +264,7 @@ export default function Mock({ rev }: { rev: number }) {
           disabled={busy}
           className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none disabled:opacity-60"
         />
-        <button onClick={send} disabled={busy || !input.trim()} className="rounded-lg bg-violet px-4 text-white disabled:opacity-50 hover:bg-violet2">
+        <button onClick={() => send()} disabled={busy || !input.trim()} className="rounded-lg bg-violet px-4 text-white disabled:opacity-50 hover:bg-violet2">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </button>
       </div>
