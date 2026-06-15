@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICM — High-Level Architecture (HLD)</title>
+<style>
+  body{margin:0;background:#0c0b1a;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Inter,system-ui,sans-serif;padding:24px}
+  .wrap{width:100%;max-width:920px}
+  svg{width:100%;height:auto;border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+  .note{color:#8f8cb5;font-size:13px;max-width:880px;margin:18px auto 0;line-height:1.6}
+  .note b{color:#cfccf0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<svg viewBox="0 0 880 720" xmlns="http://www.w3.org/2000/svg" role="img" font-family="Inter, system-ui, sans-serif">
+<title>Interview Cracking Machine — High-Level Architecture</title>
+<desc>Four layers: the React UI, a local Node backend bridge, the headless Claude Code engine, and plain-file data. Violet dotted arrows flow down as you act and Claude works; teal dotted arrows flow back up as files change and the UI updates live, forming a loop.</desc>
+<defs>
+  <marker id="vh" markerWidth="11" markerHeight="11" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8.5,3.2 L0,6.4 Z" fill="#AFA9EC"/></marker>
+  <marker id="th" markerWidth="11" markerHeight="11" refX="8" refY="3.2" orient="auto"><path d="M0,0 L8.5,3.2 L0,6.4 Z" fill="#5DCAA5"/></marker>
+</defs>
+
+<rect x="0" y="0" width="880" height="720" rx="24" fill="#141329"/>
+
+<text x="440" y="44" text-anchor="middle" fill="#F4F3FB" font-size="22" font-weight="700">Interview Cracking Machine — High-Level Architecture</text>
+<circle cx="270" cy="70" r="5" fill="#8C84E8"/><text x="282" y="74" fill="#A9A6C8" font-size="12.5">You act → Claude works</text>
+<circle cx="478" cy="70" r="5" fill="#3FCBA4"/><text x="490" y="74" fill="#A9A6C8" font-size="12.5">Files change → UI updates live</text>
+
+<text x="78" y="216" fill="#5b5880" font-size="11" font-weight="700" letter-spacing="1">01 · UI</text>
+<text x="78" y="350" fill="#5b5880" font-size="11" font-weight="700" letter-spacing="1">02 · BRIDGE</text>
+<text x="78" y="486" fill="#5b5880" font-size="11" font-weight="700" letter-spacing="1">03 · AI BRAIN</text>
+<text x="78" y="610" fill="#5b5880" font-size="11" font-weight="700" letter-spacing="1">04 · FILES</text>
+
+<rect x="310" y="96" width="260" height="42" rx="21" fill="#2A2750" stroke="#7F77DD" stroke-width="1.5"/>
+<text x="440" y="122" text-anchor="middle" fill="#F4F3FB" font-size="14" font-weight="600">You — click or speak in the app</text>
+
+<rect x="170" y="158" width="540" height="108" rx="14" fill="#1E1B3D" stroke="#322E5C"/>
+<rect x="170" y="158" width="5" height="108" rx="2.5" fill="#7F77DD"/>
+<text x="190" y="180" fill="#F4F3FB" font-size="14.5" font-weight="700">UI · React + Vite</text>
+<text x="700" y="180" text-anchor="end" fill="#A9A6C8" font-size="11.5">what you see &amp; click</text>
+<g font-size="11.5" fill="#CFCCF0">
+  <rect x="190" y="190" width="118" height="24" rx="6" fill="#2A2750"/><text x="249" y="206" text-anchor="middle">Today</text>
+  <rect x="318" y="190" width="118" height="24" rx="6" fill="#2A2750"/><text x="377" y="206" text-anchor="middle">Goals</text>
+  <rect x="446" y="190" width="118" height="24" rx="6" fill="#2A2750"/><text x="505" y="206" text-anchor="middle">Schedule</text>
+  <rect x="574" y="190" width="118" height="24" rx="6" fill="#2A2750"/><text x="633" y="206" text-anchor="middle">Review</text>
+  <rect x="190" y="220" width="118" height="24" rx="6" fill="#2A2750"/><text x="249" y="236" text-anchor="middle">Mock</text>
+  <rect x="318" y="220" width="118" height="24" rx="6" fill="#2A2750"/><text x="377" y="236" text-anchor="middle">Diary</text>
+  <rect x="446" y="220" width="118" height="24" rx="6" fill="#2A2750"/><text x="505" y="236" text-anchor="middle">Stats</text>
+  <rect x="574" y="220" width="118" height="24" rx="6" fill="#332f63"/><text x="633" y="236" text-anchor="middle" fill="#CFCCF0">Assistant ⌘K</text>
+</g>
+
+<rect x="170" y="300" width="540" height="92" rx="14" fill="#1E1B3D" stroke="#322E5C"/>
+<rect x="170" y="300" width="5" height="92" rx="2.5" fill="#7F77DD"/>
+<text x="190" y="322" fill="#F4F3FB" font-size="14.5" font-weight="700">Local Backend · Node</text>
+<text x="700" y="322" text-anchor="end" fill="#A9A6C8" font-size="11.5">the bridge</text>
+<g font-size="11.5">
+  <rect x="190" y="334" width="156" height="44" rx="8" fill="#232048" stroke="#3a376a"/><text x="268" y="354" text-anchor="middle" fill="#CFCCF0">POST /ask</text><text x="268" y="369" text-anchor="middle" fill="#8f8cb5" font-size="10.5">spawns claude</text>
+  <rect x="360" y="334" width="156" height="44" rx="8" fill="#232048" stroke="#3a376a"/><text x="438" y="354" text-anchor="middle" fill="#CFCCF0">File watcher</text><text x="438" y="369" text-anchor="middle" fill="#8f8cb5" font-size="10.5">chokidar</text>
+  <rect x="530" y="334" width="156" height="44" rx="8" fill="#232048" stroke="#3a376a"/><text x="608" y="354" text-anchor="middle" fill="#CFCCF0">WebSocket</text><text x="608" y="369" text-anchor="middle" fill="#8f8cb5" font-size="10.5">push to UI</text>
+</g>
+
+<rect x="170" y="442" width="540" height="74" rx="14" fill="#1E1B3D" stroke="#322E5C"/>
+<rect x="170" y="442" width="5" height="74" rx="2.5" fill="#AFA9EC"/>
+<text x="190" y="468" fill="#F4F3FB" font-size="14.5" font-weight="700">Claude Code engine</text>
+<text x="190" y="492" fill="#A9A6C8" font-size="12">claude -p (headless) · your Max plan · no API key</text>
+<rect x="520" y="462" width="172" height="34" rx="8" fill="#2A2750"/><text x="606" y="483" text-anchor="middle" fill="#CFCCF0" font-size="11">loads CLAUDE.md + commands</text>
+
+<rect x="170" y="556" width="540" height="104" rx="14" fill="#1E1B3D" stroke="#322E5C"/>
+<rect x="170" y="556" width="5" height="104" rx="2.5" fill="#5DCAA5"/>
+<text x="190" y="578" fill="#F4F3FB" font-size="14.5" font-weight="700">Data — source of truth</text>
+<text x="700" y="578" text-anchor="end" fill="#A9A6C8" font-size="11.5">plain markdown / json</text>
+<g font-size="11" fill="#bfeedd">
+  <rect x="190" y="590" width="118" height="24" rx="6" fill="#15402f"/><text x="249" y="606" text-anchor="middle">goals/</text>
+  <rect x="318" y="590" width="118" height="24" rx="6" fill="#15402f"/><text x="377" y="606" text-anchor="middle">roadmaps/</text>
+  <rect x="446" y="590" width="118" height="24" rx="6" fill="#15402f"/><text x="505" y="606" text-anchor="middle">schedule/</text>
+  <rect x="574" y="590" width="118" height="24" rx="6" fill="#15402f"/><text x="633" y="606" text-anchor="middle">data/logs</text>
+  <rect x="190" y="620" width="118" height="24" rx="6" fill="#15402f"/><text x="249" y="636" text-anchor="middle">data/reviews</text>
+  <rect x="318" y="620" width="118" height="24" rx="6" fill="#15402f"/><text x="377" y="636" text-anchor="middle">mocks/</text>
+  <rect x="446" y="620" width="246" height="24" rx="6" fill="#21303a"/><text x="569" y="636" text-anchor="middle" fill="#8fb3c9">index.json · generated cache</text>
+</g>
+
+<g stroke="#8C84E8" stroke-width="2.6" fill="none" stroke-dasharray="7 7" marker-end="url(#vh)">
+  <path d="M440,140 L440,156"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="0.9s" repeatCount="indefinite"/></path>
+  <path d="M440,266 L440,298"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="0.9s" repeatCount="indefinite"/></path>
+  <path d="M440,392 L440,440"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="0.9s" repeatCount="indefinite"/></path>
+  <path d="M440,516 L440,554"><animate attributeName="stroke-dashoffset" from="28" to="0" dur="0.9s" repeatCount="indefinite"/></path>
+</g>
+
+<path d="M170,479 L106,479 Q86,479 86,459 L86,232 Q86,212 106,212 L168,212" fill="none" stroke="#8C84E8" stroke-width="2.6" stroke-dasharray="7 7" marker-end="url(#vh)"><animate attributeName="stroke-dashoffset" from="34" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+<text x="70" y="350" fill="#8C84E8" font-size="11.5" font-weight="600" transform="rotate(-90,70,350)" text-anchor="middle">streams progress</text>
+
+<path d="M710,600 L780,600 Q800,600 800,580 L800,226 Q800,205 780,205 L712,205" fill="none" stroke="#3FCBA4" stroke-width="2.6" stroke-dasharray="7 7" marker-end="url(#th)"><animate attributeName="stroke-dashoffset" from="34" to="0" dur="1.1s" repeatCount="indefinite"/></path>
+<text x="816" y="405" fill="#3FCBA4" font-size="11.5" font-weight="600" transform="rotate(-90,816,405)" text-anchor="middle">live update · WebSocket</text>
+
+<text x="440" y="700" text-anchor="middle" fill="#6f6c93" font-size="12">The loop: you act → Claude edits files → the UI updates live — no terminal after launch.</text>
+</svg>
+<p class="note">
+<b>How to read it (top → bottom = a request; the sides = the response):</b>
+You act in the <b>UI</b> → the <b>Backend</b> spawns the headless <b>Claude Code engine</b> on your Max plan (no API key) → Claude reads &amp; edits the <b>plain data files</b>, which are the single source of truth.
+Coming back up: Claude <b>streams its progress</b> into the assistant panel (violet, left), and the backend's <b>file watcher</b> detects the changed files and <b>pushes a live update</b> to the UI over WebSocket (teal, right) — so the dashboard re-renders by itself. That closed loop is the whole app.
+</p>
+</div>
+</body>
+</html>

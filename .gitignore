@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+app/dist/
+server/dist/
+.vite/
+
+# Generated cache (per spec section 5: derived/cache is git-ignored)
+data/index.json
+
+# Tauri (Phase 7)
+src-tauri/target/
+
+# Logs & env
+*.log
+npm-debug.log*
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+.idea/
+*.swp
