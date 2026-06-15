@@ -7,7 +7,7 @@ hours_per_week: 14
 status: active
 ---
 ## Milestones
-- [ ] RAG + LLM systems module
+- [x] RAG + LLM systems module
 - [ ] Evals & observability fundamentals
 - [ ] Agents & tool-use patterns
 - [ ] DSA: 60 problems across core patterns

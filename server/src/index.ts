@@ -9,15 +9,50 @@ import matter from "gray-matter";
 
 import { PORT, REPO_ROOT, WATCH_DIRS, LOGS_DIR, today } from "./config.js";
 import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
-import { appendTestLine } from "./prompts.js";
+import { appendTestLine, writeDiaryLog, suggestRoadmap, ingestCourse } from "./prompts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
-const ACTIONS: Record<string, () => string> = {
+type Action = (params: Record<string, unknown>) => string;
+const ACTIONS: Record<string, Action> = {
   appendTestLine: () => appendTestLine(today()),
+  writeDiaryNote: (p) => writeDiaryLog(today(), String(p.note ?? "")),
+  suggestRoadmap: (p) => suggestRoadmap(String(p.goalId ?? "")),
+  ingestCourse: (p) =>
+    ingestCourse(String(p.goalId ?? ""), String(p.name ?? ""), String(p.link ?? ""), String(p.syllabus ?? "")),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(__dirname, "..", "public");
+
+/**
+ * Resolve a repo-relative path and confirm it lives inside a watched data dir.
+ * Returns the absolute path, or null if it escapes the allowed roots.
+ */
+function resolveSafe(rel: string): string | null {
+  if (!rel) return null;
+  const abs = path.resolve(REPO_ROOT, rel);
+  const ok = WATCH_DIRS.some(
+    (d) => abs === path.join(REPO_ROOT, d) || abs.startsWith(path.join(REPO_ROOT, d) + path.sep),
+  );
+  return ok ? abs : null;
+}
+
+/** Atomic write: temp file then rename, so a failure never leaves a half file. */
+async function atomicWrite(abs: string, content: string): Promise<void> {
+  await fs.mkdir(path.dirname(abs), { recursive: true });
+  const tmp = `${abs}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, content, "utf8");
+  await fs.rename(tmp, abs);
+}
+
+/** kebab-case slug for ids/filenames. */
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60);
+}
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -50,13 +85,139 @@ app.get("/api/logs", async (_req, res) => {
 });
 
 /**
- * POST /ask  { action? | prompt?, sessionId? }
+ * GET /api/file?path=<relative path>
+ * Returns a single file's raw content + parsed frontmatter. Path is guarded to
+ * the data dirs so the UI can't read arbitrary files.
+ */
+app.get("/api/file", async (req, res) => {
+  const rel = String(req.query.path ?? "");
+  const abs = resolveSafe(rel);
+  if (!abs) {
+    res.status(400).json({ error: "path must be inside a data directory" });
+    return;
+  }
+  try {
+    const raw = await fs.readFile(abs, "utf8");
+    const { data, content } = matter(raw);
+    res.json({ path: rel, raw, frontmatter: data, content });
+  } catch {
+    res.status(404).json({ error: "not found", path: rel });
+  }
+});
+
+/**
+ * GET /api/collection?dir=goals
+ * List every .md file in a top-level data dir with parsed frontmatter + body.
+ */
+app.get("/api/collection", async (req, res) => {
+  const dir = String(req.query.dir ?? "");
+  if (!WATCH_DIRS.includes(dir)) {
+    res.status(400).json({ error: `dir must be one of ${WATCH_DIRS.join(", ")}` });
+    return;
+  }
+  try {
+    const base = path.join(REPO_ROOT, dir);
+    const names = (await fs.readdir(base).catch(() => [] as string[]))
+      .filter((f) => f.endsWith(".md"))
+      .sort();
+    const items = await Promise.all(
+      names.map(async (file) => {
+        const raw = await fs.readFile(path.join(base, file), "utf8");
+        const { data, content } = matter(raw);
+        return { file: `${dir}/${file}`, frontmatter: data, content };
+      }),
+    );
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/write { path, content } — atomic deterministic write (UI edits). */
+app.post("/api/write", async (req, res) => {
+  const { path: rel, content } = req.body ?? {};
+  const abs = resolveSafe(String(rel ?? ""));
+  if (!abs || typeof content !== "string") {
+    res.status(400).json({ error: "path (inside a data dir) and content are required" });
+    return;
+  }
+  try {
+    await atomicWrite(abs, content);
+    res.json({ ok: true, path: rel });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/goals { title, north_star, target_date, hours_per_week, milestones? }
+ * Create a goal file from structured fields (valid frontmatter guaranteed).
+ */
+app.post("/api/goals", async (req, res) => {
+  const b = req.body ?? {};
+  const title = String(b.title ?? "").trim();
+  if (!title) {
+    res.status(400).json({ error: "title is required" });
+    return;
+  }
+  const id = slugify(String(b.id || title));
+  const milestones: string[] = Array.isArray(b.milestones) ? b.milestones.map(String) : [];
+  const frontmatter = {
+    id,
+    title,
+    north_star: String(b.north_star ?? ""),
+    target_date: String(b.target_date ?? ""),
+    hours_per_week: Number(b.hours_per_week ?? 0),
+    status: "active",
+  };
+  const body =
+    "## Milestones\n" + (milestones.length ? milestones.map((m) => `- [ ] ${m}`).join("\n") : "- [ ] ");
+  const content = matter.stringify(`\n${body}\n`, frontmatter);
+  const rel = `goals/${id}.md`;
+  try {
+    await atomicWrite(path.join(REPO_ROOT, rel), content);
+    res.json({ ok: true, path: rel, id });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/roadmap-node { path, index, patch }
+ * Patch a single node in a roadmap's frontmatter `nodes` list, atomically.
+ */
+app.post("/api/roadmap-node", async (req, res) => {
+  const { path: rel, index, patch } = req.body ?? {};
+  const abs = resolveSafe(String(rel ?? ""));
+  if (!abs || typeof index !== "number" || typeof patch !== "object" || !patch) {
+    res.status(400).json({ error: "path, index (number) and patch (object) are required" });
+    return;
+  }
+  try {
+    const raw = await fs.readFile(abs, "utf8");
+    const parsed = matter(raw);
+    const nodes = Array.isArray((parsed.data as any).nodes) ? (parsed.data as any).nodes : [];
+    if (index < 0 || index >= nodes.length) {
+      res.status(400).json({ error: "index out of range" });
+      return;
+    }
+    nodes[index] = { ...nodes[index], ...patch };
+    (parsed.data as any).nodes = nodes;
+    await atomicWrite(abs, matter.stringify(parsed.content, parsed.data));
+    res.json({ ok: true, path: rel, node: nodes[index] });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /ask  { action? | prompt?, params?, sessionId? }
  * Provide a named `action` (resolved from server-side prompts) or a raw
  * `prompt`. Streams newline-delimited JSON: each line is a claude stream-json
  * event, plus a final { type: "done", sessionId } line.
  */
 app.post("/ask", async (req, res) => {
-  const { action, prompt: rawPrompt, sessionId } = req.body ?? {};
+  const { action, params, prompt: rawPrompt, sessionId } = req.body ?? {};
   let prompt: string | undefined;
   if (typeof action === "string") {
     const build = ACTIONS[action];
@@ -64,7 +225,7 @@ app.post("/ask", async (req, res) => {
       res.status(400).json({ error: `unknown action: ${action}` });
       return;
     }
-    prompt = build();
+    prompt = build((params ?? {}) as Record<string, unknown>);
   } else if (typeof rawPrompt === "string") {
     prompt = rawPrompt;
   }

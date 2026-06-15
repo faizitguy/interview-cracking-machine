@@ -85,7 +85,12 @@ docs/         # spec, schema, architecture
 
 The bridge spawns the local `claude` CLI (no API key) — see [server/README.md](server/README.md) for the exact command and the `/ask`, `/api/logs`, `/api/health`, `/watch` endpoints.
 
-**UI (`app/`, built in Phase 2+):** not scaffolded yet — expect `cd app && npm install && npm run dev`.
+**UI (`app/`, built in Phase 2 — Vite + React 19 + Tailwind v4):**
+- `cd app && npm install` then `npm run dev` — serves http://localhost:5317.
+- `npm run build` (`tsc --noEmit && vite build`) and `npm run typecheck`.
+- Vite proxies `/api`, `/ask`, and `/watch` (ws) to the backend on :4317, so **run the backend too**. No test runner yet.
+
+Screens live in `app/src/screens/`; the shell is `App.tsx` (sidebar + ⌘K assistant). All server calls go through `app/src/lib/api.ts` (`askStream`) and live updates through `app/src/lib/useWatch.ts`. Theme tokens are in `app/src/index.css`.
 
 
 Instructions:
