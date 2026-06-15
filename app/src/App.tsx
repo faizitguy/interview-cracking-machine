@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Send, Loader2, Square, Mic, Volume2, Trophy } from "lucide-react";
+import { Play, Send, Loader2, Square, Mic, Volume2, Trophy, History as HistoryIcon, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { askStream, eventText, fetchCollection, fetchRounds, checkHealth, type ClaudeEvent, type CollectionItem, type Round } from "./lib/api";
+import { askStream, eventText, fetchCollection, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type CollectionItem, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
 import ResumeUpload from "./components/ResumeUpload";
 import SetupBanner from "./components/SetupBanner";
+import History from "./components/History";
 
 const LEVELS = ["junior", "mid", "senior", "staff"];
+
+const navBtn = (active: boolean) =>
+  `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+    active ? "bg-edge text-bright" : "text-muted hover:text-soft hover:bg-panel2"
+  }`;
 
 interface Turn {
   role: "interviewer" | "candidate";
@@ -20,6 +26,8 @@ export default function App() {
   const [level, setLevel] = useState("mid");
   const [round, setRound] = useState("general");
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [view, setView] = useState<"interview" | "history">("interview");
+  const [historyRev, setHistoryRev] = useState(0);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -144,11 +152,23 @@ export default function App() {
     if (busy) return;
     voice.stopListen();
     voice.cancelSpeak(); // stop any in-progress interviewer speech
+    const convo = [...turns]; // the interview exchange, captured before scoring
+    const file = `${today()}-${round}-${Math.random().toString(36).slice(2, 6)}.md`;
     setTurns((t) => [...t, { role: "candidate", text: "(ended the interview)" }]);
     // The result is shown as text only — not spoken aloud.
-    await streamInto({ action: "scoreMock", params: { round, role, level }, sessionId: sessionId.current }, { speak: false });
+    await streamInto(
+      { action: "scoreMock", params: { round, role, level, file }, sessionId: sessionId.current },
+      { speak: false },
+    );
+    // Save the verbatim transcript alongside the rubric so History can show it.
+    const transcript = convo
+      .filter((t) => t.text.trim())
+      .map((t) => `**${t.role === "interviewer" ? "Interviewer" : "You"}:** ${t.text}`)
+      .join("\n\n");
+    if (transcript) await appendFile(`mocks/${file}`, `\n\n## Transcript\n\n${transcript}\n`);
     setStage("scored");
     fetchCollection("mocks").then(setMocks);
+    setHistoryRev((r) => r + 1);
   };
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
@@ -163,11 +183,47 @@ export default function App() {
     })
     .filter((d) => d.score > 0);
 
+  const nav = (
+    <header className="shrink-0 flex items-center gap-3 border-b border-edge bg-panel/60 backdrop-blur px-5 py-3">
+      <div className="flex items-center gap-2">
+        <div className="h-6 w-6 rounded-lg bg-violet grid place-items-center text-white text-xs font-bold">I</div>
+        <span className="text-bright font-semibold text-sm">Interview Cracking Machine</span>
+      </div>
+      <div className="ml-auto flex items-center gap-1">
+        <button onClick={() => setView("interview")} className={navBtn(view === "interview")}>
+          <Plus size={14} /> New interview
+        </button>
+        <button
+          onClick={() => {
+            setView("history");
+            setHistoryRev((r) => r + 1);
+          }}
+          className={navBtn(view === "history")}
+        >
+          <HistoryIcon size={14} /> History
+        </button>
+      </div>
+    </header>
+  );
+
+  if (view === "history") {
+    return (
+      <div className="h-full flex flex-col bg-ink text-soft">
+        {nav}
+        <div className="flex-1 overflow-y-auto">
+          <History rev={historyRev} />
+        </div>
+      </div>
+    );
+  }
+
   // ---- Setup / Scored ----
   if (stage === "setup" || stage === "scored") {
     const canStart = (hasResume || !!resumeName) && claudeOk;
     return (
-      <div className="min-h-full bg-ink text-soft">
+      <div className="h-full flex flex-col bg-ink text-soft">
+        {nav}
+        <div className="flex-1 overflow-y-auto">
         {!claudeOk && <SetupBanner error={claudeErr} />}
         <div className="max-w-2xl mx-auto px-6 py-12">
           <div className="flex items-center gap-3 mb-2">
@@ -294,13 +350,16 @@ export default function App() {
             </div>
           )}
         </div>
+        </div>
       </div>
     );
   }
 
   // ---- Live interview ----
   return (
-    <div className="h-full flex flex-col bg-ink text-soft max-w-3xl mx-auto w-full p-6">
+    <div className="h-full flex flex-col bg-ink text-soft">
+      {nav}
+      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full p-6">
       <div className="flex items-center gap-3 mb-4">
         <span className="text-bright font-semibold">
           {rounds.find((r) => r.id === round)?.label ?? "Interview"} · {level}
@@ -353,6 +412,7 @@ export default function App() {
         <button onClick={() => send()} disabled={busy || !input.trim()} className="rounded-lg bg-violet px-4 text-white disabled:opacity-50 hover:bg-violet2">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </button>
+      </div>
       </div>
     </div>
   );

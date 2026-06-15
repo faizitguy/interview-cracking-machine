@@ -108,6 +108,15 @@ export async function checkHealth(): Promise<Health> {
   }
 }
 
+/** Append text to a data file (used to save the verbatim transcript). */
+export async function appendFile(path: string, content: string): Promise<void> {
+  await fetch("/api/append", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+  });
+}
+
 /** Upload a resume (PDF/DOCX/txt) — parsed server-side into data/resume.md. */
 export async function uploadResume(file: File): Promise<{ filename: string; chars: number }> {
   const fd = new FormData();

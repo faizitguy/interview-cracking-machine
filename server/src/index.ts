@@ -18,7 +18,15 @@ import { synth, loadTTS, ttsReady, VOICES, DEFAULT_VOICE } from "./tts.js";
 type Action = (params: Record<string, unknown>) => string;
 const ACTIONS: Record<string, Action> = {
   startMock: (p) => mockInterviewer(String(p.round ?? "general"), String(p.role ?? ""), String(p.level ?? "mid")),
-  scoreMock: (p) => mockScore(String(p.round ?? "general"), String(p.role ?? ""), String(p.level ?? "mid"), today()),
+  scoreMock: (p) =>
+    mockScore(
+      String(p.round ?? "general"),
+      String(p.role ?? ""),
+      String(p.level ?? "mid"),
+      today(),
+      // sanitize the client-provided filename to a bare mocks/*.md name
+      String(p.file ?? `${today()}-mock.md`).replace(/[^a-zA-Z0-9._-]/g, "") || `${today()}-mock.md`,
+    ),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -124,6 +132,28 @@ app.post("/api/resume", upload.single("file"), async (req, res) => {
     });
     await atomicWrite(path.join(REPO_ROOT, "data", "resume.md"), content);
     res.json({ ok: true, filename: file.originalname, chars: text.length });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/append { path, content } — append text to a data file (atomic). */
+app.post("/api/append", async (req, res) => {
+  const abs = resolveSafe(String(req.body?.path ?? ""));
+  const content = req.body?.content;
+  if (!abs || typeof content !== "string") {
+    res.status(400).json({ error: "path (in a data dir) and content are required" });
+    return;
+  }
+  try {
+    let existing = "";
+    try {
+      existing = await fs.readFile(abs, "utf8");
+    } catch {
+      /* new file */
+    }
+    await atomicWrite(abs, existing + content);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

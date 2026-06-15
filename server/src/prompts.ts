@@ -105,7 +105,7 @@ export function mockInterviewer(roundId: string, role: string, level: string): s
 }
 
 /** Wrap + score the interview honestly, writing a rubric file (resumed session). */
-export function mockScore(roundId: string, role: string, level: string, date: string): string {
+export function mockScore(roundId: string, role: string, level: string, date: string, file: string): string {
   const round = roundById(roundId);
   return [
     `The interview is over. Step out of character and grade it HONESTLY and`,
@@ -113,16 +113,20 @@ export function mockScore(roundId: string, role: string, level: string, date: st
     `round — fair, not generous. Weigh the skills that actually matter for a`,
     `${round.label} interview.`,
     ``,
-    `Write the assessment to a new file mocks/${date}-${round.id}-<n>.md (pick a`,
-    `short unique suffix <n> so you never overwrite an existing mock).`,
+    `Write the assessment to exactly this file: mocks/${file} (create it).`,
     `Frontmatter: type: "${round.id}", level: ${level}, date: ${date}, verdict`,
     `(one honest line), and a rubric with FOUR 1–4 scores: communication, depth,`,
     `problem_solving, confidence.`,
-    `Body: a "## Summary" of how it went and a "## Evidence notes" section citing`,
-    `specific answers (and any code) that justify each score, plus the single most`,
-    `useful thing to improve for this kind of round.`,
+    `Body, in this order:`,
+    `## Summary — how the interview actually went (2–4 sentences).`,
+    `## What to improve — the most important, specific, actionable next steps,`,
+    `   honest and concrete (a short list). This is the part the candidate will`,
+    `   study, so make it genuinely useful — name the gaps and exactly what to do.`,
+    `## Evidence notes — cite specific answers (and any code) that justify each`,
+    `   score, including what was strong.`,
+    `Do NOT include a transcript section (it is appended separately).`,
     ``,
     `Write only that one file. Then reply to the candidate, warm and direct, with`,
-    `the verdict, the four scores, and that one improvement (2–4 sentences).`,
+    `the verdict, the four scores, and the top improvement (2–4 sentences).`,
   ].join("\n");
 }
