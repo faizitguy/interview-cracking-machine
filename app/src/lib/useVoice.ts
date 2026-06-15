@@ -30,6 +30,14 @@ export function useVoice() {
   const queueRef = useRef<string[]>([]);
   const playingRef = useRef(false);
   const voiceRef = useRef("af_heart");
+  const genRef = useRef(0); // bumped on cancel so stale audio never plays
+  const doneResolvers = useRef<(() => void)[]>([]);
+
+  const flushDone = () => {
+    const rs = doneResolvers.current;
+    doneResolvers.current = [];
+    rs.forEach((r) => r());
+  };
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -69,8 +77,10 @@ export function useVoice() {
     const text = queueRef.current.shift();
     if (text == null) {
       setSpeaking(false);
+      flushDone(); // interviewer finished speaking this turn
       return;
     }
+    const myGen = genRef.current;
     playingRef.current = true;
     setSpeaking(true);
     let url: string | null = null;
@@ -80,7 +90,7 @@ export function useVoice() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, voice: voiceRef.current }),
       });
-      if (res.ok) {
+      if (res.ok && genRef.current === myGen) {
         const buf = await res.arrayBuffer();
         url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
         const a = ensureAudio();
@@ -97,7 +107,8 @@ export function useVoice() {
     } finally {
       if (url) URL.revokeObjectURL(url);
       playingRef.current = false;
-      playNext();
+      if (genRef.current === myGen) playNext();
+      else flushDone();
     }
   }, []);
 
@@ -123,6 +134,7 @@ export function useVoice() {
   );
 
   const cancelSpeak = useCallback(() => {
+    genRef.current += 1; // invalidate any in-flight/queued audio
     queueRef.current = [];
     const a = audioRef.current;
     if (a) {
@@ -131,6 +143,15 @@ export function useVoice() {
     }
     playingRef.current = false;
     setSpeaking(false);
+    flushDone();
+  }, []);
+
+  /** Resolves once the interviewer has finished speaking the current turn. */
+  const whenDoneSpeaking = useCallback(() => {
+    return new Promise<void>((resolve) => {
+      if (!playingRef.current && queueRef.current.length === 0) resolve();
+      else doneResolvers.current.push(resolve);
+    });
   }, []);
 
   /** Listen for one candidate turn; resolves the final transcript via onFinal. */
@@ -182,6 +203,7 @@ export function useVoice() {
     unlock,
     speak,
     cancelSpeak,
+    whenDoneSpeaking,
     listen,
     stopListen,
   };

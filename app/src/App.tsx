@@ -89,8 +89,11 @@ export default function App() {
     }
   };
 
-  const listenForReply = () => {
+  // Auto-listen for the reply, but only AFTER the interviewer finishes speaking
+  // — otherwise starting the mic barges-in and cuts the interviewer's audio off.
+  const listenForReply = async () => {
     if (!voice.sttSupported) return;
+    await voice.whenDoneSpeaking();
     setInterim("");
     voice.listen(
       (finalText) => {
