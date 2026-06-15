@@ -27,6 +27,7 @@ The interviewer is a persistent `claude` session: `startMock` opens it (reads `d
 - **TTS = Kokoro** (free local neural TTS via `kokoro-js`), generated **server-side** in `server/src/tts.ts` and served as WAV from `POST /api/tts`; the model warms up on server start. Voices listed at `GET /api/tts/voices` (default `af_heart`). `app/src/lib/useVoice.ts` fetches and plays the WAV, splitting text into sentences/clauses so the first audio starts fast while the rest generate.
 - **STT = browser Web Speech API** (free) for hearing the candidate; auto-listens after each interviewer turn. `sttSupported` gates the mic; typing always works as fallback.
 - Voice is **always on, no toggle**; it starts automatically when the interview begins (the Start click unlocks audio autoplay). It can't be heard in a headless browser, but `POST /api/tts` returning valid WAV is verifiable.
+- The live interview is a **video-call layout** (`app/src/components/LiveCall.tsx`): two tiles (an audio-reactive **RobotAvatar** that vibrates in sync with the voice via a Web Audio analyser from `useVoice.getAnalyser()`, and the candidate's **real webcam** via `getUserMedia` video-only), live captions, a collapsible transcript drawer, and Meet-style controls (mute → pauses STT listening, camera on/off, transcript, End & score). The camera is for realism only — not sent to the AI. The setup is a 3-step wizard (`SetupWizard.tsx`).
 
 ## Conventions / rules
 

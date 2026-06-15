@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Loader2, Square, Mic, Volume2, Trophy, History as HistoryIcon, Plus } from "lucide-react";
+import { Trophy, History as HistoryIcon, Plus } from "lucide-react";
 import { askStream, eventText, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
 import SetupBanner from "./components/SetupBanner";
 import SetupWizard from "./components/SetupWizard";
 import History from "./components/History";
 import Landing from "./components/Landing";
+import LiveCall from "./components/LiveCall";
 
 const navBtn = (active: boolean) =>
   `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
@@ -26,6 +27,7 @@ export default function App() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [view, setView] = useState<"landing" | "interview" | "history">("landing");
   const [historyRev, setHistoryRev] = useState(0);
+  const [micMuted, setMicMuted] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +41,6 @@ export default function App() {
   const voice = useVoice();
   const sessionId = useRef<string | null>(null);
   const startedAt = useRef(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const poll = () =>
@@ -65,10 +66,6 @@ export default function App() {
     const t = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt.current) / 1000)), 500);
     return () => clearInterval(t);
   }, [stage]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [turns]);
 
   const streamInto = async (req: Parameters<typeof askStream>[0], opts?: { speak?: boolean }) => {
     setBusy(true);
@@ -102,8 +99,9 @@ export default function App() {
   // Auto-listen for the reply, but only AFTER the interviewer finishes speaking
   // — otherwise starting the mic barges-in and cuts the interviewer's audio off.
   const listenForReply = async () => {
-    if (!voice.sttSupported) return;
+    if (!voice.sttSupported || micMuted) return;
     await voice.whenDoneSpeaking();
+    if (micMuted) return;
     setInterim("");
     voice.listen(
       (finalText) => {
@@ -123,6 +121,7 @@ export default function App() {
 
   const start = async () => {
     voice.unlock(); // must run inside the click gesture so audio can play
+    setMicMuted(false);
     setStage("live");
     setTurns([]);
     sessionId.current = null;
@@ -163,8 +162,6 @@ export default function App() {
     setHistoryRev((r) => r + 1);
   };
 
-  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
-  const ss = String(elapsed % 60).padStart(2, "0");
 
   if (view === "landing") return <Landing onStart={() => setView("interview")} />;
 
@@ -256,75 +253,23 @@ export default function App() {
     );
   }
 
-  // ---- Live interview ----
+  // ---- Live interview (video-call layout) ----
   return (
-    <div className="h-full flex flex-col bg-ink text-soft">
-      {nav}
-      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full px-6 py-5">
-      <div className="flex items-center gap-3 mb-5">
-        <span className={`orb h-10 w-10 shrink-0 ${voice.speaking ? "speaking" : ""} ${voice.listening ? "listening" : ""}`}>
-          <span className="orb-ring" />
-        </span>
-        <div className="leading-tight">
-          <div className="font-display font-semibold text-bright">
-            {rounds.find((r) => r.id === round)?.label ?? "Interview"}
-            <span className="text-faint font-normal font-sans"> · {level}</span>
-          </div>
-          <div className="text-xs h-4">
-            {voice.speaking ? (
-              <span className="text-coral flex items-center gap-1"><Volume2 size={12} /> speaking…</span>
-            ) : voice.listening ? (
-              <span className="text-teal flex items-center gap-1"><Mic size={12} /> listening…</span>
-            ) : (
-              <span className="text-faint">your turn</span>
-            )}
-          </div>
-        </div>
-        <span className="ml-auto font-mono text-lg text-soft tnum">{mm}:{ss}</span>
-        <button onClick={endAndScore} disabled={busy} className="flex items-center gap-1.5 rounded-xl border border-edge2 bg-panel px-3.5 py-2 text-sm font-medium text-soft hover:border-coral hover:text-coral transition-colors disabled:opacity-50">
-          <Square size={13} /> End &amp; score
-        </button>
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-1 pb-2">
-        {turns.map((t, i) => (
-          <div key={i} className={`reveal in ${t.role === "candidate" ? "text-right" : ""}`}>
-            <div className={`inline-block rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap text-left max-w-[85%] leading-relaxed ${t.role === "candidate" ? "bg-violet text-white glow-iris" : "card-base text-soft"}`}>
-              {t.text || (busy ? <span className="shimmer">thinking…</span> : "…")}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {(voice.listening || interim) && (
-        <p className="mt-3 text-sm text-teal flex items-center gap-1.5">
-          <Mic size={13} className="animate-pulse" />
-          {interim || "Listening…"}
-        </p>
-      )}
-      <div className="mt-3 flex gap-2">
-        {voice.sttSupported && (
-          <button
-            onClick={() => (voice.listening ? voice.stopListen() : listenForReply())}
-            title="Push to talk (interrupts the interviewer)"
-            className={`rounded-xl border px-3.5 transition-colors ${voice.listening ? "border-teal text-teal bg-teal/5" : "border-edge2 text-soft hover:border-violet"}`}
-          >
-            <Mic size={16} />
-          </button>
-        )}
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
-          placeholder="Type your answer (or use the mic)…"
-          disabled={busy}
-          className="flex-1 rounded-xl border border-edge bg-panel2 px-4 py-3 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none disabled:opacity-60"
-        />
-        <button onClick={() => send()} disabled={busy || !input.trim()} className="btn-primary rounded-xl px-5">
-          {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        </button>
-      </div>
-      </div>
-    </div>
+    <LiveCall
+      roundLabel={rounds.find((r) => r.id === round)?.label ?? "Interview"}
+      level={level}
+      elapsed={elapsed}
+      turns={turns}
+      busy={busy}
+      voice={voice}
+      interim={interim}
+      input={input}
+      setInput={setInput}
+      send={send}
+      listenForReply={listenForReply}
+      onEnd={endAndScore}
+      micMuted={micMuted}
+      setMicMuted={setMicMuted}
+    />
   );
 }

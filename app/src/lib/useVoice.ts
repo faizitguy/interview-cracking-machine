@@ -35,6 +35,30 @@ export function useVoice() {
   const voiceRef = useRef("af_heart");
   const genRef = useRef(0); // bumped on cancel so stale audio never plays
   const doneResolvers = useRef<(() => void)[]>([]);
+  // Web Audio analyser so the avatar can vibrate in sync with the real voice.
+  const ctxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+
+  const ensureGraph = () => {
+    if (analyserRef.current) return;
+    try {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      const a = audioRef.current ?? new Audio();
+      audioRef.current = a;
+      const ctx = new Ctx();
+      const src = ctx.createMediaElementSource(a);
+      const an = ctx.createAnalyser();
+      an.fftSize = 256;
+      src.connect(an);
+      an.connect(ctx.destination);
+      ctxRef.current = ctx;
+      analyserRef.current = an;
+    } catch {
+      /* analyser is a nice-to-have */
+    }
+  };
+  const getAnalyser = useCallback(() => analyserRef.current, []);
 
   const flushDone = () => {
     const rs = doneResolvers.current;
@@ -70,6 +94,8 @@ export function useVoice() {
   /** Run inside the Start gesture to permit autoplay later. */
   const unlock = useCallback(() => {
     const a = ensureAudio();
+    ensureGraph();
+    ctxRef.current?.resume().catch(() => {});
     a.src = SILENT_WAV;
     a.muted = true;
     a.play().catch(() => {});
@@ -95,6 +121,7 @@ export function useVoice() {
     if (consumingRef.current) return;
     consumingRef.current = true;
     setSpeaking(true);
+    ctxRef.current?.resume().catch(() => {});
     const a = ensureAudio();
     while (pendingRef.current.length) {
       const url = await pendingRef.current.shift()!;
@@ -204,6 +231,7 @@ export function useVoice() {
     speak,
     cancelSpeak,
     whenDoneSpeaking,
+    getAnalyser,
     listen,
     stopListen,
   };
