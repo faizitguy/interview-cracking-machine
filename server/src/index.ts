@@ -12,6 +12,7 @@ import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
 import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
 import { mockInterviewer, mockScore } from "./prompts.js";
 import { parseResume } from "./resume.js";
+import { synth, loadTTS, ttsReady, VOICES, DEFAULT_VOICE } from "./tts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
 type Action = (params: Record<string, unknown>) => string;
@@ -125,6 +126,29 @@ app.post("/api/resume", upload.single("file"), async (req, res) => {
   }
 });
 
+/** GET /api/tts/voices — Kokoro voice catalog + whether the model is loaded. */
+app.get("/api/tts/voices", (_req, res) => {
+  res.json({ ready: ttsReady(), default: DEFAULT_VOICE, voices: VOICES });
+});
+
+/** POST /api/tts { text, voice } — neural TTS, returns audio/wav (Kokoro). */
+app.post("/api/tts", async (req, res) => {
+  const text = String(req.body?.text ?? "").trim();
+  const voice = String(req.body?.voice ?? DEFAULT_VOICE);
+  if (!text) {
+    res.status(400).json({ error: "text is required" });
+    return;
+  }
+  try {
+    const wav = await synth(text, voice);
+    res.setHeader("Content-Type", "audio/wav");
+    res.setHeader("Content-Length", String(wav.length));
+    res.end(wav);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 /**
  * POST /ask  { action? | prompt?, params?, sessionId? }
  * Streams newline-delimited JSON claude events, then { type: "done", sessionId }.
@@ -183,4 +207,8 @@ for (const evt of ["add", "change", "unlink"] as const) {
 
 server.listen(PORT, () => {
   console.log(`ICM interview server on http://localhost:${PORT}  (data home: ${REPO_ROOT})`);
+  // Warm up the Kokoro model in the background so the first turn speaks fast.
+  loadTTS()
+    .then(() => console.log("Kokoro TTS ready"))
+    .catch((e) => console.warn("Kokoro TTS warmup failed:", e?.message));
 });

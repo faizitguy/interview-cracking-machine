@@ -1,114 +1,135 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Zero-setup, FREE browser voice: SpeechSynthesis for the interviewer's voice
- * (TTS) and the Web Speech API for the candidate's mic (STT). All local, no
- * API keys, no network cost.
+ * Voice for the interview:
+ *  - TTS: Kokoro (neural, free, local) generated server-side and played here as
+ *    WAV. Realistic and consistent across browsers.
+ *  - STT: the browser Web Speech API (free) for hearing the candidate's answers.
  *
- * Two things make TTS actually work reliably:
- *  1) unlock() must run inside a user gesture (the Start click) — Chrome blocks
- *     speech that isn't tied to a recent gesture, which is why audio that's
- *     triggered later from a network callback silently never plays.
- *  2) long text is split into sentences (Chrome cuts off utterances ~15s).
+ * unlock() must run inside the Start click so the browser lets audio autoplay.
  */
 
-// Highest-quality voices first. macOS "Enhanced/Premium" + Siri and Google/
-// Microsoft neural voices sound the most natural; fall back to any en voice.
-const PREFERRED = [
-  /siri/i,
-  /\((Premium|Enhanced)\)/i,
-  /\b(Ava|Zoe|Evan|Nathan|Joelle|Samantha|Allison|Serena|Tom|Daniel)\b/i,
-  /Google US English/i,
-  /Google UK English/i,
-  /Microsoft.*(Aria|Jenny|Guy|Natural)/i,
-  /Natural/i,
-];
+// 1-frame silent WAV to grant audio activation on the Start gesture.
+const SILENT_WAV =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
 
-function chooseVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
-  const en = voices.filter((v) => v.lang?.toLowerCase().startsWith("en"));
-  const pool = en.length ? en : voices;
-  for (const re of PREFERRED) {
-    const hit = pool.find((v) => re.test(v.name));
-    if (hit) return hit;
-  }
-  return pool.find((v) => v.lang?.toLowerCase() === "en-us") ?? pool[0] ?? null;
+export interface VoiceOption {
+  id: string;
+  label: string;
 }
 
 export function useVoice() {
-  const [supported, setSupported] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [voiceName, setVoiceName] = useState<string>("");
-  const recRef = useRef<any>(null);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const [voices, setVoices] = useState<VoiceOption[]>([]);
+  const [voiceName, setVoiceName] = useState("af_heart");
 
-  // Load voices (getVoices is async — populated on 'voiceschanged').
+  const recRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const queueRef = useRef<string[]>([]);
+  const playingRef = useRef(false);
+  const voiceRef = useRef("af_heart");
+
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const hasTTS = "speechSynthesis" in window;
-    setSupported(!!SR && hasTTS);
-    if (!hasTTS) return;
-    const load = () => {
-      const list = window.speechSynthesis.getVoices();
-      if (!list.length) return;
-      setVoices(list);
-      if (!voiceRef.current) {
-        const chosen = chooseVoice(list);
-        voiceRef.current = chosen;
-        setVoiceName(chosen?.name ?? "");
-      }
-    };
-    load();
-    window.speechSynthesis.onvoiceschanged = load;
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
+    setSttSupported(!!SR);
+    fetch("/api/tts/voices")
+      .then((r) => r.json())
+      .then((j) => {
+        if (Array.isArray(j.voices)) setVoices(j.voices);
+        if (j.default) {
+          voiceRef.current = j.default;
+          setVoiceName(j.default);
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  const setVoice = useCallback(
-    (name: string) => {
-      const v = voices.find((x) => x.name === name) ?? null;
-      voiceRef.current = v;
-      setVoiceName(name);
+  const setVoice = useCallback((id: string) => {
+    voiceRef.current = id;
+    setVoiceName(id);
+  }, []);
+
+  const ensureAudio = () => {
+    if (!audioRef.current) audioRef.current = new Audio();
+    return audioRef.current;
+  };
+
+  /** Run inside the Start gesture to permit autoplay later. */
+  const unlock = useCallback(() => {
+    const a = ensureAudio();
+    a.src = SILENT_WAV;
+    a.muted = true;
+    a.play().catch(() => {});
+  }, []);
+
+  const playNext = useCallback(async () => {
+    if (playingRef.current) return;
+    const text = queueRef.current.shift();
+    if (text == null) {
+      setSpeaking(false);
+      return;
+    }
+    playingRef.current = true;
+    setSpeaking(true);
+    let url: string | null = null;
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voice: voiceRef.current }),
+      });
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        url = URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+        const a = ensureAudio();
+        a.muted = false;
+        a.src = url;
+        await a.play().catch(() => {});
+        await new Promise<void>((resolve) => {
+          a.onended = () => resolve();
+          a.onerror = () => resolve();
+        });
+      }
+    } catch {
+      /* ignore one chunk */
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      playingRef.current = false;
+      playNext();
+    }
+  }, []);
+
+  /**
+   * Queue interviewer text to be spoken. Split into sentences so the first one
+   * synthesizes and starts playing fast (~1s) while the rest generate — instead
+   * of waiting for the whole turn.
+   */
+  const speak = useCallback(
+    (text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      // Break on sentence ends + em-dash/semicolon so the first chunk is short
+      // (fast time-to-first-audio); the rest generate while it plays.
+      const sentences = t.match(/[^.!?;—\n]+[.!?;—]*(\s+|$)/g) ?? [t];
+      for (const s of sentences) {
+        const x = s.trim();
+        if (x) queueRef.current.push(x);
+      }
+      playNext();
     },
-    [voices],
+    [playNext],
   );
 
-  /** Call inside a user gesture (Start click) to activate the speech engine. */
-  const unlock = useCallback(() => {
-    if (!("speechSynthesis" in window)) return;
-    try {
-      window.speechSynthesis.resume();
-      const u = new SpeechSynthesisUtterance(" ");
-      u.volume = 0;
-      if (voiceRef.current) u.voice = voiceRef.current;
-      window.speechSynthesis.speak(u);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const speak = useCallback((text: string) => {
-    if (!("speechSynthesis" in window) || !text.trim()) return;
-    const ss = window.speechSynthesis;
-    ss.resume(); // defeat the "stuck paused" state
-    const parts = text.match(/[^.!?\n]+[.!?]*\s*/g) ?? [text];
-    for (const part of parts) {
-      const t = part.trim();
-      if (!t) continue;
-      const u = new SpeechSynthesisUtterance(t);
-      if (voiceRef.current) u.voice = voiceRef.current;
-      u.rate = 1.0;
-      u.pitch = 1.0;
-      u.onstart = () => setSpeaking(true);
-      u.onend = () => setSpeaking(window.speechSynthesis.speaking);
-      ss.speak(u);
-    }
-  }, []);
-
   const cancelSpeak = useCallback(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    queueRef.current = [];
+    const a = audioRef.current;
+    if (a) {
+      a.pause();
+      a.currentTime = 0;
+    }
+    playingRef.current = false;
     setSpeaking(false);
   }, []);
 
@@ -152,7 +173,7 @@ export function useVoice() {
   useEffect(() => () => cancelSpeak(), [cancelSpeak]);
 
   return {
-    supported,
+    sttSupported,
     listening,
     speaking,
     voices,

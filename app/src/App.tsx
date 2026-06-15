@@ -74,7 +74,7 @@ export default function App() {
               n[n.length - 1] = { role: "interviewer", text: (n[n.length - 1].text + " " + text).trim() };
               return n;
             });
-            if (voice.supported) voice.speak(text);
+            voice.speak(text);
           }
         }
       });
@@ -90,7 +90,7 @@ export default function App() {
   };
 
   const listenForReply = () => {
-    if (!voice.supported) return;
+    if (!voice.sttSupported) return;
     setInterim("");
     voice.listen(
       (finalText) => {
@@ -194,30 +194,23 @@ export default function App() {
 
             <div>
               <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">3 · Interviewer voice</label>
-              {voice.supported ? (
-                <div className="flex items-center gap-2">
-                  <Mic size={15} className="text-violet2 shrink-0" />
-                  <select
-                    value={voice.voiceName}
-                    onChange={(e) => voice.setVoice(e.target.value)}
-                    className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
-                  >
-                    {voice.voices
-                      .filter((v) => v.lang?.toLowerCase().startsWith("en"))
-                      .map((v) => (
-                        <option key={v.name} value={v.name} className="bg-panel">
-                          {v.name} ({v.lang})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              ) : (
-                <p className="text-faint text-sm">
-                  This browser has no speech support — the interview will run as text. Try Chrome or Safari.
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <Volume2 size={15} className="text-violet2 shrink-0" />
+                <select
+                  value={voice.voiceName}
+                  onChange={(e) => voice.setVoice(e.target.value)}
+                  className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
+                >
+                  {voice.voices.map((v) => (
+                    <option key={v.id} value={v.id} className="bg-panel">
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <p className="text-faint text-xs mt-1.5">
-                Spoken interview — the voice starts automatically once you begin.
+                Realistic neural voice (Kokoro, runs locally). It starts automatically once you begin.
+                {!voice.sttSupported && " Your browser can't capture speech, so you'll type answers."}
               </p>
             </div>
 
@@ -285,7 +278,7 @@ export default function App() {
         </p>
       )}
       <div className="mt-3 flex gap-2">
-        {voice.supported && (
+        {voice.sttSupported && (
           <button
             onClick={() => (voice.listening ? voice.stopListen() : listenForReply())}
             title="Push to talk (interrupts the interviewer)"

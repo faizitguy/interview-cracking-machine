@@ -22,9 +22,11 @@ Four layers, same live loop as before, now single-purpose:
 
 The interviewer is a persistent `claude` session: `startMock` opens it (reads `data/resume.md`), each candidate turn is a `POST /ask` with `sessionId` to resume, and `scoreMock` (resumed) writes the rubric file. Keep all prompts in `server/src/prompts.ts`.
 
-## Voice (voice-first by default)
+## Voice (always on, voice-first)
 
-`app/src/lib/useVoice.ts` uses the **browser Web Speech API** (STT) + `SpeechSynthesis` (TTS) — zero-setup, the spec's fallback path. After each interviewer turn the app auto-listens; the **Start** click is the user gesture that unlocks audio, so the first line won't speak before then. Local whisper.cpp/Kokoro can later swap in behind the same `useVoice` interface. Voice needs a real browser with mic permission — it can't be exercised headlessly.
+- **TTS = Kokoro** (free local neural TTS via `kokoro-js`), generated **server-side** in `server/src/tts.ts` and served as WAV from `POST /api/tts`; the model warms up on server start. Voices listed at `GET /api/tts/voices` (default `af_heart`). `app/src/lib/useVoice.ts` fetches and plays the WAV, splitting text into sentences/clauses so the first audio starts fast while the rest generate.
+- **STT = browser Web Speech API** (free) for hearing the candidate; auto-listens after each interviewer turn. `sttSupported` gates the mic; typing always works as fallback.
+- Voice is **always on, no toggle**; it starts automatically when the interview begins (the Start click unlocks audio autoplay). It can't be heard in a headless browser, but `POST /api/tts` returning valid WAV is verifiable.
 
 ## Conventions / rules
 
