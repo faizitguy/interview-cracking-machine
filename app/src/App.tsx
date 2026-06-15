@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Send, Loader2, Square, Mic, Volume2, Trophy, History as HistoryIcon, Plus } from "lucide-react";
+import { Send, Loader2, Square, Mic, Volume2, Trophy, History as HistoryIcon, Plus } from "lucide-react";
 import { askStream, eventText, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
-import ResumeUpload from "./components/ResumeUpload";
 import SetupBanner from "./components/SetupBanner";
+import SetupWizard from "./components/SetupWizard";
 import History from "./components/History";
 import Landing from "./components/Landing";
-
-const LEVELS = ["junior", "mid", "senior", "staff"];
 
 const navBtn = (active: boolean) =>
   `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
@@ -214,9 +212,9 @@ export default function App() {
         {nav}
         <div className="flex-1 overflow-y-auto">
         {!claudeOk && <SetupBanner error={claudeErr} />}
-        <div className="max-w-xl mx-auto px-6 py-12">
-          {stage === "scored" && (
-            <div className="hairline rounded-2xl p-6 mb-8 glow-coral relative overflow-hidden">
+        {stage === "scored" && (
+          <div className="max-w-2xl mx-auto px-6 pt-10">
+            <div className="hairline rounded-2xl p-6 glow-coral relative overflow-hidden">
               <div className="flex items-center gap-3 mb-3">
                 <span className="orb h-9 w-9"><span className="orb-ring" /></span>
                 <span className="font-display font-semibold text-bright">Your result is in</span>
@@ -233,111 +231,26 @@ export default function App() {
                 See full feedback &amp; transcript in History <HistoryIcon size={14} />
               </button>
             </div>
-          )}
-
-          <p className="text-amber font-mono text-xs uppercase tracking-[0.2em] mb-2">
-            {stage === "scored" ? "Go again" : "New session"}
-          </p>
-          <h1 className="font-display text-4xl font-bold text-bright leading-tight">
-            Set up your <span className="text-aurora">mock interview</span>
-          </h1>
-          <p className="text-muted mt-3 mb-8 leading-relaxed">
-            Pick a round and a voice. Your interviewer reads your résumé and digs into the real projects and
-            skills you've listed — then scores you honestly.
-          </p>
-
-          <div className="card-base p-6 space-y-5">
-            <div>
-              <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">1 · Your resume</label>
-              <ResumeUpload current={resumeName} onUploaded={setResumeName} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">2 · Interview type</label>
-                <select
-                  value={round}
-                  onChange={(e) => setRound(e.target.value)}
-                  className="w-full rounded-xl border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
-                >
-                  {rounds.map((r) => (
-                    <option key={r.id} value={r.id} className="bg-panel">{r.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">Level</label>
-                <select value={level} onChange={(e) => setLevel(e.target.value)} className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft">
-                  {LEVELS.map((l) => (
-                    <option key={l} className="bg-panel">{l}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">Target role (optional)</label>
-                <input
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  placeholder="e.g. Senior Frontend Engineer"
-                  className="w-full rounded-xl border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">3 · Interviewer voice</label>
-              <div className="flex items-center gap-2">
-                <Volume2 size={15} className="text-violet2 shrink-0" />
-                <select
-                  value={voice.voiceName}
-                  onChange={(e) => {
-                    voice.setVoice(e.target.value);
-                    voice.cancelSpeak();
-                  }}
-                  className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
-                >
-                  {voice.voices.map((v) => (
-                    <option key={v.id} value={v.id} className="bg-panel">
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => (voice.speaking ? voice.cancelSpeak() : testVoice())}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-2.5 text-sm shrink-0 ${
-                    voice.speaking ? "border-teal text-teal" : "border-edge2 text-soft hover:border-violet"
-                  }`}
-                >
-                  {voice.speaking ? (
-                    <>
-                      <Square size={13} /> Stop
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 size={14} /> Test
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-faint text-xs mt-1.5">
-                Realistic neural voice (Kokoro, runs locally). It starts automatically once you begin.
-                {!voice.sttSupported && " Your browser can't capture speech, so you'll type answers."}
-              </p>
-            </div>
-
           </div>
+        )}
 
-          <button
-            onClick={start}
-            disabled={!canStart}
-            className="btn-primary w-full flex items-center justify-center gap-2 rounded-xl px-4 py-4 text-base mt-6"
-          >
-            <Play size={17} /> {stage === "scored" ? "Start another interview" : "Start interview"}
-          </button>
-          {!hasResume && !resumeName && (
-            <p className="text-faint text-xs text-center mt-3">Upload a résumé above to begin.</p>
-          )}
-        </div>
+        <SetupWizard
+          scored={stage === "scored"}
+          resumeName={resumeName}
+          hasResume={hasResume}
+          onResumeUploaded={setResumeName}
+          round={round}
+          setRound={setRound}
+          rounds={rounds}
+          level={level}
+          setLevel={setLevel}
+          role={role}
+          setRole={setRole}
+          voice={voice}
+          onTestVoice={testVoice}
+          canStart={canStart}
+          onStart={start}
+        />
         </div>
       </div>
     );
