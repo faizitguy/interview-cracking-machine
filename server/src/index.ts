@@ -53,11 +53,14 @@ let busy = false;
 
 app.get("/api/health", async (_req, res) => {
   const claude = await checkClaudeInstalled();
-  const hasResume = await fs
-    .access(path.join(REPO_ROOT, "data", "resume.md"))
-    .then(() => true)
-    .catch(() => false);
-  res.json({ ok: true, claude, hasResume });
+  let resumeName: string | undefined;
+  try {
+    const { data } = matter(await fs.readFile(path.join(REPO_ROOT, "data", "resume.md"), "utf8"));
+    resumeName = String((data as any).filename ?? "résumé on file");
+  } catch {
+    /* no resume yet */
+  }
+  res.json({ ok: true, claude, hasResume: !!resumeName, resumeName });
 });
 
 /** Read a single data file (raw + frontmatter). Path-guarded to data dirs. */

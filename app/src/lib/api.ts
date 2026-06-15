@@ -80,13 +80,14 @@ export interface Health {
   ok: boolean;
   error?: string;
   hasResume: boolean;
+  resumeName?: string;
 }
 
 export async function checkHealth(): Promise<Health> {
   try {
     const r = await fetch("/api/health");
     const j = await r.json();
-    return { ok: j.claude?.ok ?? false, error: j.claude?.error, hasResume: !!j.hasResume };
+    return { ok: j.claude?.ok ?? false, error: j.claude?.error, hasResume: !!j.hasResume, resumeName: j.resumeName };
   } catch (e) {
     return { ok: false, error: (e as Error).message, hasResume: false };
   }

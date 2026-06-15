@@ -40,6 +40,7 @@ export default function App() {
         setClaudeOk(h.ok);
         setClaudeErr(h.error);
         setHasResume(h.hasResume);
+        if (h.resumeName) setResumeName((cur) => cur ?? h.resumeName); // show the stored resume
       });
     poll();
     const t = setInterval(poll, 15000);

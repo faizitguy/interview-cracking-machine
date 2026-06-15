@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Upload, FileText, Loader2, CheckCircle2 } from "lucide-react";
 import { uploadResume } from "../lib/api";
 
@@ -13,6 +13,11 @@ export default function ResumeUpload({
   const [error, setError] = useState("");
   const [name, setName] = useState(current ?? "");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reflect a resume that was already stored (e.g. after a page refresh).
+  useEffect(() => {
+    if (current && !name) setName(current);
+  }, [current, name]);
 
   const handle = async (file?: File) => {
     if (!file) return;
