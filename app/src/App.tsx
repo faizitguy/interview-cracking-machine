@@ -60,7 +60,7 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [turns]);
 
-  const streamInto = async (req: Parameters<typeof askStream>[0]) => {
+  const streamInto = async (req: Parameters<typeof askStream>[0], opts?: { speak?: boolean }) => {
     setBusy(true);
     setTurns((t) => [...t, { role: "interviewer", text: "" }]);
     try {
@@ -74,7 +74,7 @@ export default function App() {
               n[n.length - 1] = { role: "interviewer", text: (n[n.length - 1].text + " " + text).trim() };
               return n;
             });
-            voice.speak(text);
+            if (opts?.speak !== false) voice.speak(text);
           }
         }
       });
@@ -127,8 +127,10 @@ export default function App() {
   const endAndScore = async () => {
     if (busy) return;
     voice.stopListen();
+    voice.cancelSpeak(); // stop any in-progress interviewer speech
     setTurns((t) => [...t, { role: "candidate", text: "(ended the interview)" }]);
-    await streamInto({ action: "scoreMock", params: { role, level }, sessionId: sessionId.current });
+    // The result is shown as text only — not spoken aloud.
+    await streamInto({ action: "scoreMock", params: { role, level }, sessionId: sessionId.current }, { speak: false });
     setStage("scored");
     fetchCollection("mocks").then(setMocks);
   };

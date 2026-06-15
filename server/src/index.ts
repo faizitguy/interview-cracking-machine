@@ -135,12 +135,13 @@ app.get("/api/tts/voices", (_req, res) => {
 app.post("/api/tts", async (req, res) => {
   const text = String(req.body?.text ?? "").trim();
   const voice = String(req.body?.voice ?? DEFAULT_VOICE);
+  const speed = req.body?.speed != null ? Number(req.body.speed) : undefined;
   if (!text) {
     res.status(400).json({ error: "text is required" });
     return;
   }
   try {
-    const wav = await synth(text, voice);
+    const wav = await synth(text, voice, speed);
     res.setHeader("Content-Type", "audio/wav");
     res.setHeader("Content-Length", String(wav.length));
     res.end(wav);

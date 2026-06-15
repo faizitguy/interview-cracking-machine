@@ -39,14 +39,18 @@ export const VOICES = VOICE_IDS.map((id) => {
 });
 
 export const DEFAULT_VOICE = "af_heart";
+export const DEFAULT_SPEED = 1.15; // a touch faster than 1.0 = more natural pace
 
 // Serialize generation so concurrent requests don't fight over onnxruntime.
 let chain: Promise<unknown> = Promise.resolve();
 
-export function synth(text: string, voice: string): Promise<Buffer> {
+export function synth(text: string, voice: string, speed = DEFAULT_SPEED): Promise<Buffer> {
   const run = chain.then(async () => {
     const tts = await loadTTS();
-    const audio = await tts.generate(text, { voice: VALID.has(voice) ? voice : DEFAULT_VOICE });
+    const audio = await tts.generate(text, {
+      voice: VALID.has(voice) ? voice : DEFAULT_VOICE,
+      speed: Number.isFinite(speed) ? Math.min(1.5, Math.max(0.7, speed)) : DEFAULT_SPEED,
+    });
     return Buffer.from(audio.toWav());
   });
   chain = run.catch(() => {});
