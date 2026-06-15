@@ -185,8 +185,7 @@ export default function LiveCall(p: Props) {
         </Ctrl>
         <button
           onClick={p.onEnd}
-          disabled={p.busy}
-          className="flex items-center gap-2 rounded-full bg-bad px-5 py-3.5 text-sm font-semibold text-white hover:brightness-110 transition disabled:opacity-50 shadow-[0_12px_30px_-8px_rgba(255,107,107,.6)]"
+          className="flex items-center gap-2 rounded-full bg-bad px-5 py-3.5 text-sm font-semibold text-white hover:brightness-110 transition shadow-[0_12px_30px_-8px_rgba(255,107,107,.6)]"
         >
           <PhoneOff size={18} /> End &amp; score
         </button>

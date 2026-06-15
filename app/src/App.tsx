@@ -37,10 +37,16 @@ export default function App() {
   const [claudeErr, setClaudeErr] = useState<string>();
   const [resumeName, setResumeName] = useState<string>();
   const [hasResume, setHasResume] = useState(false);
+  const [scoring, setScoring] = useState(false);
+  const [result, setResult] = useState("");
 
   const voice = useVoice();
   const sessionId = useRef<string | null>(null);
   const startedAt = useRef(0);
+  const busyRef = useRef(false);
+  busyRef.current = busy;
+  const stageRef = useRef(stage);
+  stageRef.current = stage;
 
   useEffect(() => {
     const poll = () =>
@@ -101,7 +107,7 @@ export default function App() {
   const listenForReply = async () => {
     if (!voice.sttSupported || micMuted) return;
     await voice.whenDoneSpeaking();
-    if (micMuted) return;
+    if (micMuted || stageRef.current !== "live") return; // don't listen after the call ends
     setInterim("");
     voice.listen(
       (finalText) => {
@@ -122,6 +128,8 @@ export default function App() {
   const start = async () => {
     voice.unlock(); // must run inside the click gesture so audio can play
     setMicMuted(false);
+    setResult("");
+    setScoring(false);
     setStage("live");
     setTurns([]);
     sessionId.current = null;
@@ -130,6 +138,8 @@ export default function App() {
     await streamInto({ action: "startMock", params: { round, role, level } });
     listenForReply();
   };
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   const send = async (textArg?: string) => {
     const msg = (textArg ?? input).trim();
@@ -140,26 +150,45 @@ export default function App() {
     listenForReply();
   };
 
+  // End the interview NOW: stop the voice/mic, leave the call immediately, then
+  // score in the background. Never blocked by an in-flight turn.
   const endAndScore = async () => {
-    if (busy) return;
+    voice.cancelSpeak();
     voice.stopListen();
-    voice.cancelSpeak(); // stop any in-progress interviewer speech
-    const convo = [...turns]; // the interview exchange, captured before scoring
-    const file = `${today()}-${round}-${Math.random().toString(36).slice(2, 6)}.md`;
-    setTurns((t) => [...t, { role: "candidate", text: "(ended the interview)" }]);
-    // The result is shown as text only — not spoken aloud.
-    await streamInto(
-      { action: "scoreMock", params: { round, role, level, file }, sessionId: sessionId.current },
-      { speak: false },
-    );
-    // Save the verbatim transcript alongside the rubric so History can show it.
-    const transcript = convo
-      .filter((t) => t.text.trim())
-      .map((t) => `**${t.role === "interviewer" ? "Interviewer" : "You"}:** ${t.text}`)
-      .join("\n\n");
-    if (transcript) await appendFile(`mocks/${file}`, `\n\n## Transcript\n\n${transcript}\n`);
+    const convo = turns.filter((t) => t.text.trim());
+    const sid = sessionId.current;
+
+    // Close the call instantly.
     setStage("scored");
-    setHistoryRev((r) => r + 1);
+
+    if (!sid) {
+      // Ended before the interview even started — nothing to grade.
+      setScoring(false);
+      setResult("");
+      return;
+    }
+
+    setScoring(true);
+    setResult("");
+    const file = `${today()}-${round}-${Math.random().toString(36).slice(2, 6)}.md`;
+    try {
+      // The backend runs one AI action at a time; wait for any in-flight turn.
+      for (let i = 0; i < 80 && busyRef.current; i++) await sleep(250);
+      const { result: scored } = await askStream(
+        { action: "scoreMock", params: { round, role, level, file }, sessionId: sid },
+        () => {},
+      );
+      setResult(scored ?? "Interview ended.");
+      const transcript = convo
+        .map((t) => `**${t.role === "interviewer" ? "Interviewer" : "You"}:** ${t.text}`)
+        .join("\n\n");
+      if (transcript) await appendFile(`mocks/${file}`, `\n\n## Transcript\n\n${transcript}\n`);
+      setHistoryRev((r) => r + 1);
+    } catch (e) {
+      setResult(`Couldn't score this one (${(e as Error).message}). Your transcript is safe — try another.`);
+    } finally {
+      setScoring(false);
+    }
   };
 
 
@@ -209,21 +238,28 @@ export default function App() {
         {nav}
         <div className="flex-1 overflow-y-auto">
         {!claudeOk && <SetupBanner error={claudeErr} />}
-        {stage === "scored" && (
+        {stage === "scored" && (scoring || result) && (
           <div className="max-w-2xl mx-auto px-6 pt-10">
             <div className="hairline rounded-2xl p-6 glow-coral relative overflow-hidden">
               <div className="flex items-center gap-3 mb-3">
-                <span className="orb h-9 w-9"><span className="orb-ring" /></span>
-                <span className="font-display font-semibold text-bright">Your result is in</span>
+                <span className={`orb h-9 w-9 ${scoring ? "speaking" : ""}`}><span className="orb-ring" /></span>
+                <span className="font-display font-semibold text-bright">
+                  {scoring ? "Scoring your interview…" : "Your result is in"}
+                </span>
                 <Trophy size={16} className="ml-auto text-amber" />
               </div>
-              <p className="text-soft text-sm whitespace-pre-wrap leading-relaxed">{turns[turns.length - 1]?.text}</p>
+              {scoring ? (
+                <p className="shimmer text-sm">Reviewing your answers and writing honest feedback…</p>
+              ) : (
+                <p className="text-soft text-sm whitespace-pre-wrap leading-relaxed">{result}</p>
+              )}
               <button
+                disabled={scoring}
                 onClick={() => {
                   setView("history");
                   setHistoryRev((r) => r + 1);
                 }}
-                className="mt-4 text-sm text-violet2 hover:text-bright inline-flex items-center gap-1.5"
+                className="mt-4 text-sm text-violet2 hover:text-bright inline-flex items-center gap-1.5 disabled:opacity-40"
               >
                 See full feedback &amp; transcript in History <HistoryIcon size={14} />
               </button>
