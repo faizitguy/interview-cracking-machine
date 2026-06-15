@@ -10,15 +10,15 @@ import multer from "multer";
 
 import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
 import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
-import { mockInterviewer, mockScore } from "./prompts.js";
+import { mockInterviewer, mockScore, ROUNDS } from "./prompts.js";
 import { parseResume } from "./resume.js";
 import { synth, loadTTS, ttsReady, VOICES, DEFAULT_VOICE } from "./tts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
 type Action = (params: Record<string, unknown>) => string;
 const ACTIONS: Record<string, Action> = {
-  startMock: (p) => mockInterviewer(String(p.role ?? ""), String(p.level ?? "mid")),
-  scoreMock: (p) => mockScore(String(p.role ?? ""), String(p.level ?? "mid"), today()),
+  startMock: (p) => mockInterviewer(String(p.round ?? "general"), String(p.role ?? ""), String(p.level ?? "mid")),
+  scoreMock: (p) => mockScore(String(p.round ?? "general"), String(p.role ?? ""), String(p.level ?? "mid"), today()),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -127,6 +127,11 @@ app.post("/api/resume", upload.single("file"), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+/** GET /api/rounds — selectable interview rounds (id + label). */
+app.get("/api/rounds", (_req, res) => {
+  res.json({ rounds: ROUNDS.map((r) => ({ id: r.id, label: r.label })) });
 });
 
 /** GET /api/tts/voices — Kokoro voice catalog + whether the model is loaded. */

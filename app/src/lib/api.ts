@@ -70,6 +70,21 @@ export function eventText(ev: ClaudeEvent): string {
   return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("");
 }
 
+export interface Round {
+  id: string;
+  label: string;
+}
+
+export async function fetchRounds(): Promise<Round[]> {
+  try {
+    const r = await fetch("/api/rounds");
+    const j = await r.json();
+    return j.rounds ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchCollection(dir: string): Promise<CollectionItem[]> {
   const r = await fetch(`/api/collection?dir=${encodeURIComponent(dir)}`);
   if (!r.ok) return [];

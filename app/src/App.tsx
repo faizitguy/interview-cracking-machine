@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Send, Loader2, Square, Mic, Volume2, Trophy } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { askStream, eventText, fetchCollection, checkHealth, type ClaudeEvent, type CollectionItem } from "./lib/api";
+import { askStream, eventText, fetchCollection, fetchRounds, checkHealth, type ClaudeEvent, type CollectionItem, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
 import ResumeUpload from "./components/ResumeUpload";
 import SetupBanner from "./components/SetupBanner";
@@ -18,6 +18,8 @@ export default function App() {
   const [stage, setStage] = useState<Stage>("setup");
   const [role, setRole] = useState("");
   const [level, setLevel] = useState("mid");
+  const [round, setRound] = useState("general");
+  const [rounds, setRounds] = useState<Round[]>([]);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -50,6 +52,12 @@ export default function App() {
   useEffect(() => {
     fetchCollection("mocks").then(setMocks);
   }, [stage]);
+
+  useEffect(() => {
+    fetchRounds().then((r) => {
+      if (r.length) setRounds(r);
+    });
+  }, []);
 
   useEffect(() => {
     if (stage !== "live") return;
@@ -119,7 +127,7 @@ export default function App() {
     sessionId.current = null;
     startedAt.current = Date.now();
     setElapsed(0);
-    await streamInto({ action: "startMock", params: { role, level } });
+    await streamInto({ action: "startMock", params: { round, role, level } });
     listenForReply();
   };
 
@@ -138,7 +146,7 @@ export default function App() {
     voice.cancelSpeak(); // stop any in-progress interviewer speech
     setTurns((t) => [...t, { role: "candidate", text: "(ended the interview)" }]);
     // The result is shown as text only — not spoken aloud.
-    await streamInto({ action: "scoreMock", params: { role, level }, sessionId: sessionId.current }, { speak: false });
+    await streamInto({ action: "scoreMock", params: { round, role, level }, sessionId: sessionId.current }, { speak: false });
     setStage("scored");
     fetchCollection("mocks").then(setMocks);
   };
@@ -187,13 +195,16 @@ export default function App() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">2 · Target role</label>
-                <input
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  placeholder="e.g. AI Engineer (optional)"
-                  className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none"
-                />
+                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">2 · Interview type</label>
+                <select
+                  value={round}
+                  onChange={(e) => setRound(e.target.value)}
+                  className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
+                >
+                  {rounds.map((r) => (
+                    <option key={r.id} value={r.id} className="bg-panel">{r.label}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">Level</label>
@@ -202,6 +213,15 @@ export default function App() {
                     <option key={l} className="bg-panel">{l}</option>
                   ))}
                 </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">Target role (optional)</label>
+                <input
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="e.g. Senior Frontend Engineer"
+                  className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none"
+                />
               </div>
             </div>
 
@@ -282,7 +302,9 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-ink text-soft max-w-3xl mx-auto w-full p-6">
       <div className="flex items-center gap-3 mb-4">
-        <span className="text-bright font-semibold">{role || "Interview"} · {level}</span>
+        <span className="text-bright font-semibold">
+          {rounds.find((r) => r.id === round)?.label ?? "Interview"} · {level}
+        </span>
         <span className="font-mono text-lg text-violet2 tabular-nums">{mm}:{ss}</span>
         {voice.speaking && (
           <span className="flex items-center gap-1.5 text-teal text-sm">

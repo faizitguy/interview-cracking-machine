@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Interview Cracking Machine** — a local-first **mock-interview app**. You upload your resume, and Claude (the local `claude` CLI, behind the UI) runs a realistic **voice-first** interview that mixes questions about your actual experience with the top common questions for your target role, then writes an **honest scored rubric** to `mocks/`.
+**Interview Cracking Machine** — a local-first **mock-interview app**. You upload your resume, pick an **interview round** (General/Behavioral, DSA, System Design, AI Engineering, Python, Backend, Frontend, Full-Stack — `server/src/prompts.ts` `ROUNDS`, served via `GET /api/rounds`), and Claude (the local `claude` CLI, behind the UI) runs a realistic **voice-first** interview anchored in your resume's actual skills/projects, then writes an **honest, round-aware scored rubric** to `mocks/`. `startMock`/`scoreMock` take `{ round, role, level }`.
 
 > History: this began as a multi-module study app (the 7 phases in [docs/ICM-BUILD-SPEC.md](docs/ICM-BUILD-SPEC.md)). It was deliberately **stripped down to the interview module only**. Today/Diary/Goals/Schedule/Review/Stats and their backend actions were removed (recoverable in git history before the rebuild commit). The build spec is now historical context, not the current scope.
 
