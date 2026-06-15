@@ -7,9 +7,15 @@ import { WebSocketServer, WebSocket } from "ws";
 import chokidar from "chokidar";
 import matter from "gray-matter";
 
-import { PORT, REPO_ROOT, WATCH_DIRS, LOGS_DIR, today } from "./config.js";
+import { PORT, REPO_ROOT, WATCH_DIRS, LOGS_DIR, today, isoWeek } from "./config.js";
 import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
-import { appendTestLine, writeDiaryLog, suggestRoadmap, ingestCourse } from "./prompts.js";
+import {
+  appendTestLine,
+  writeDiaryLog,
+  suggestRoadmap,
+  ingestCourse,
+  planWeek,
+} from "./prompts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
 type Action = (params: Record<string, unknown>) => string;
@@ -19,6 +25,7 @@ const ACTIONS: Record<string, Action> = {
   suggestRoadmap: (p) => suggestRoadmap(String(p.goalId ?? "")),
   ingestCourse: (p) =>
     ingestCourse(String(p.goalId ?? ""), String(p.name ?? ""), String(p.link ?? ""), String(p.syllabus ?? "")),
+  planWeek: (p) => planWeek(String(p.goalId ?? ""), String(p.week ?? isoWeek()), today()),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -205,6 +212,53 @@ app.post("/api/roadmap-node", async (req, res) => {
     (parsed.data as any).nodes = nodes;
     await atomicWrite(abs, matter.stringify(parsed.content, parsed.data));
     res.json({ ok: true, path: rel, node: nodes[index] });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/schedule/block { week, op, block? | id? | patch? | minutes? }
+ * Mutate a week's time-blocks (add | update | delete | log) atomically, so the
+ * UI never has to rewrite YAML. `log` adds focus-timer minutes to a block.
+ */
+app.post("/api/schedule/block", async (req, res) => {
+  const { week, op, block, id, patch, minutes } = req.body ?? {};
+  if (typeof week !== "string" || !/^\d{4}-W\d{2}$/.test(week)) {
+    res.status(400).json({ error: "week (YYYY-Www) is required" });
+    return;
+  }
+  const rel = `schedule/${week}.md`;
+  const abs = path.join(REPO_ROOT, rel);
+  try {
+    let data: any = { week, blocks: [] };
+    let body = "";
+    try {
+      const parsed = matter(await fs.readFile(abs, "utf8"));
+      data = { week, blocks: [], ...parsed.data };
+      body = parsed.content;
+    } catch {
+      /* new week file */
+    }
+    if (!Array.isArray(data.blocks)) data.blocks = [];
+
+    if (op === "add") {
+      const newId = `b${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+      data.blocks.push({ id: newId, actual_min: 0, planned_min: 0, ...(block ?? {}) });
+    } else if (op === "update") {
+      const i = data.blocks.findIndex((b: any) => b.id === id);
+      if (i >= 0) data.blocks[i] = { ...data.blocks[i], ...(patch ?? {}) };
+    } else if (op === "delete") {
+      data.blocks = data.blocks.filter((b: any) => b.id !== id);
+    } else if (op === "log") {
+      const i = data.blocks.findIndex((b: any) => b.id === id);
+      if (i >= 0) data.blocks[i].actual_min = (Number(data.blocks[i].actual_min) || 0) + Number(minutes || 0);
+    } else {
+      res.status(400).json({ error: "op must be add | update | delete | log" });
+      return;
+    }
+    await atomicWrite(abs, matter.stringify(body || "\n", data));
+    res.json({ ok: true, path: rel, blocks: data.blocks });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

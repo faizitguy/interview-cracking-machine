@@ -5,6 +5,8 @@ import AssistantPanel from "./components/AssistantPanel";
 import Today from "./screens/Today";
 import Diary from "./screens/Diary";
 import Goals from "./screens/Goals";
+import Schedule from "./screens/Schedule";
+import Stats from "./screens/Stats";
 import Placeholder from "./screens/Placeholder";
 import { NAV, type ScreenId } from "./nav";
 import { useWatch } from "./lib/useWatch";
@@ -52,6 +54,8 @@ export default function App() {
           {screen === "today" && <Today rev={rev} />}
           {screen === "diary" && <Diary />}
           {screen === "goals" && <Goals rev={rev} />}
+          {screen === "schedule" && <Schedule rev={rev} />}
+          {screen === "stats" && <Stats rev={rev} />}
           {current.placeholder && <Placeholder id={screen} />}
         </main>
       </div>

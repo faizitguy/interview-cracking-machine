@@ -154,3 +154,37 @@ export function today(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** ISO week id like 2026-W25 for a date (default now). */
+export function isoWeek(date = new Date()): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+  const week =
+    1 +
+    Math.round(
+      ((d.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7,
+    );
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+export interface ScheduleBlock {
+  id: string;
+  day: string;
+  topic: string;
+  start?: string;
+  end?: string;
+  planned_min: number;
+  actual_min: number;
+}
+
+type BlockOp =
+  | { op: "add"; block: Partial<ScheduleBlock> }
+  | { op: "update"; id: string; patch: Partial<ScheduleBlock> }
+  | { op: "delete"; id: string }
+  | { op: "log"; id: string; minutes: number };
+
+export function scheduleBlock(week: string, args: BlockOp): Promise<{ blocks: ScheduleBlock[] }> {
+  return postJson("/api/schedule/block", { week, ...args });
+}

@@ -75,6 +75,35 @@ export function suggestRoadmap(goalId: string): string {
 }
 
 /**
+ * Backward-plan a week of time-blocks from the goal's roadmap + weekly hours,
+ * written to schedule/<week>.md per docs/data-schema.md.
+ */
+export function planWeek(goalId: string, week: string, todayDate: string): string {
+  return [
+    `Plan a realistic week of study time-blocks for goal ${goalId}, for ISO`,
+    `week ${week} (today is ${todayDate}).`,
+    ``,
+    `First read goals/${goalId}.md (hours_per_week, target_date) and, if it`,
+    `exists, roadmaps/${goalId}.md (the in-progress and pending nodes). Then`,
+    `write schedule/${week}.md following docs/data-schema.md.`,
+    ``,
+    `Frontmatter must have: week: ${week}, and a "blocks:" YAML list. Each block:`,
+    `id (short unique string), day (Mon..Sun), topic (tie to a roadmap node when`,
+    `possible), start and end ("HH:MM", 24h), planned_min (number), actual_min: 0.`,
+    ``,
+    `Rules:`,
+    `- Total planned minutes ≈ the goal's hours_per_week.`,
+    `- Backward-plan from the target_date: prioritize in-progress then pending`,
+    `  nodes; add a 20% buffer and include at least one review block.`,
+    `- Spread blocks across days realistically (evenings on weekdays, longer on`,
+    `  weekends); avoid scheduling in the past relative to today.`,
+    `- If schedule/${week}.md already exists, overwrite it with the new plan`,
+    `  (schedules are editable drafts).`,
+    `Write only that one file. Reply with one sentence stating total planned hours.`,
+  ].join("\n");
+}
+
+/**
  * Parse a course (name/link/syllabus) into roadmap nodes and merge them into
  * roadmaps/<goalId>.md without dropping existing nodes.
  */
