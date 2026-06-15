@@ -75,6 +75,30 @@ export function suggestRoadmap(goalId: string): string {
 }
 
 /**
+ * Generate spaced-repetition review cards from a goal's weak areas / roadmap,
+ * one markdown file each under data/reviews/ per docs/data-schema.md.
+ */
+export function suggestReviewCards(goalId: string, count: number): string {
+  return [
+    `Create ${count} spaced-repetition review cards for goal ${goalId}.`,
+    ``,
+    `Read goals/${goalId}.md and roadmaps/${goalId}.md if present, plus the most`,
+    `recent daily logs in data/logs/ — pay attention to anything under`,
+    `"Weak / flagged". Choose ${count} of the most valuable, interview-relevant`,
+    `topics (RAG, evals, agents, LLM serving, fundamentals, DSA).`,
+    ``,
+    `For EACH card, create a new file data/reviews/<slug>.md following`,
+    `docs/data-schema.md, with frontmatter: id (the slug), topic, status: yellow,`,
+    `last_reviewed: "" (empty), interval_days: 1, confidence: 0. Body has a`,
+    `"## Prompt" section (a sharp interview-style question) and a`,
+    `"## Solution (hidden until attempted)" section (a concise correct answer).`,
+    ``,
+    `Use distinct slugs so you never overwrite an existing card. Create only`,
+    `files under data/reviews/. Reply with one sentence stating how many cards.`,
+  ].join("\n");
+}
+
+/**
  * Backward-plan a week of time-blocks from the goal's roadmap + weekly hours,
  * written to schedule/<week>.md per docs/data-schema.md.
  */

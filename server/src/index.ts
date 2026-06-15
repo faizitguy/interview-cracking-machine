@@ -15,6 +15,7 @@ import {
   suggestRoadmap,
   ingestCourse,
   planWeek,
+  suggestReviewCards,
 } from "./prompts.js";
 
 /** Named AI actions → server-side prompts (spec section 4: prompts live here). */
@@ -26,6 +27,7 @@ const ACTIONS: Record<string, Action> = {
   ingestCourse: (p) =>
     ingestCourse(String(p.goalId ?? ""), String(p.name ?? ""), String(p.link ?? ""), String(p.syllabus ?? "")),
   planWeek: (p) => planWeek(String(p.goalId ?? ""), String(p.week ?? isoWeek()), today()),
+  suggestReviewCards: (p) => suggestReviewCards(String(p.goalId ?? ""), Number(p.count ?? 6)),
 };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -118,12 +120,12 @@ app.get("/api/file", async (req, res) => {
  */
 app.get("/api/collection", async (req, res) => {
   const dir = String(req.query.dir ?? "");
-  if (!WATCH_DIRS.includes(dir)) {
-    res.status(400).json({ error: `dir must be one of ${WATCH_DIRS.join(", ")}` });
+  const base = resolveSafe(dir);
+  if (!base) {
+    res.status(400).json({ error: "dir must be inside a data directory" });
     return;
   }
   try {
-    const base = path.join(REPO_ROOT, dir);
     const names = (await fs.readdir(base).catch(() => [] as string[]))
       .filter((f) => f.endsWith(".md"))
       .sort();
@@ -261,6 +263,68 @@ app.post("/api/schedule/block", async (req, res) => {
     res.json({ ok: true, path: rel, blocks: data.blocks });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/reviews { topic, prompt, solution } — create a spaced-repetition card.
+ */
+app.post("/api/reviews", async (req, res) => {
+  const b = req.body ?? {};
+  const topic = String(b.topic ?? "").trim();
+  const prompt = String(b.prompt ?? "").trim();
+  if (!topic || !prompt) {
+    res.status(400).json({ error: "topic and prompt are required" });
+    return;
+  }
+  const id = `${slugify(topic)}-${Date.now().toString(36)}`;
+  const frontmatter = {
+    id,
+    topic,
+    status: "yellow",
+    last_reviewed: "",
+    interval_days: 1,
+    confidence: 0,
+  };
+  const body = `## Prompt\n${prompt}\n\n## Solution (hidden until attempted)\n${String(b.solution ?? "")}\n`;
+  const rel = `data/reviews/${id}.md`;
+  try {
+    await atomicWrite(path.join(REPO_ROOT, rel), matter.stringify(`\n${body}`, frontmatter));
+    res.json({ ok: true, path: rel, id });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/review/rate { id, confidence } — reschedule a card by rating.
+ * Intervals ladder 1·3·7·14·30; confidence>=3 advances, ==2 holds, <=1 resets.
+ */
+const LADDER = [1, 3, 7, 14, 30];
+app.post("/api/review/rate", async (req, res) => {
+  const { id, confidence } = req.body ?? {};
+  const c = Number(confidence);
+  if (!id || !(c >= 1 && c <= 4)) {
+    res.status(400).json({ error: "id and confidence (1–4) are required" });
+    return;
+  }
+  const rel = `data/reviews/${id}.md`;
+  const abs = path.join(REPO_ROOT, rel);
+  try {
+    const parsed = matter(await fs.readFile(abs, "utf8"));
+    const data = parsed.data as any;
+    const curIdx = Math.max(0, LADDER.indexOf(Number(data.interval_days) || 1));
+    let nextIdx = curIdx;
+    if (c >= 3) nextIdx = Math.min(curIdx + 1, LADDER.length - 1);
+    else if (c <= 1) nextIdx = 0;
+    data.interval_days = LADDER[nextIdx];
+    data.confidence = c;
+    data.last_reviewed = today();
+    data.status = c >= 3 ? "green" : c === 2 ? "yellow" : "red";
+    await atomicWrite(abs, matter.stringify(parsed.content, data));
+    res.json({ ok: true, path: rel, interval_days: data.interval_days, status: data.status });
+  } catch {
+    res.status(404).json({ error: "card not found", path: rel });
   }
 });
 

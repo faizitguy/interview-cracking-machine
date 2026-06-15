@@ -188,3 +188,11 @@ type BlockOp =
 export function scheduleBlock(week: string, args: BlockOp): Promise<{ blocks: ScheduleBlock[] }> {
   return postJson("/api/schedule/block", { week, ...args });
 }
+
+export function rateReview(id: string, confidence: number): Promise<any> {
+  return postJson("/api/review/rate", { id, confidence });
+}
+
+export function createReview(card: { topic: string; prompt: string; solution: string }): Promise<any> {
+  return postJson("/api/reviews", card);
+}

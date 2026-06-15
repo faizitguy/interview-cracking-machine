@@ -6,6 +6,7 @@ import Today from "./screens/Today";
 import Diary from "./screens/Diary";
 import Goals from "./screens/Goals";
 import Schedule from "./screens/Schedule";
+import Review from "./screens/Review";
 import Stats from "./screens/Stats";
 import Placeholder from "./screens/Placeholder";
 import { NAV, type ScreenId } from "./nav";
@@ -55,6 +56,7 @@ export default function App() {
           {screen === "diary" && <Diary />}
           {screen === "goals" && <Goals rev={rev} />}
           {screen === "schedule" && <Schedule rev={rev} />}
+          {screen === "review" && <Review rev={rev} />}
           {screen === "stats" && <Stats rev={rev} />}
           {current.placeholder && <Placeholder id={screen} />}
         </main>

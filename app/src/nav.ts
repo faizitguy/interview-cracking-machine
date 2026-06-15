@@ -25,7 +25,7 @@ export const NAV: NavItem[] = [
   { id: "diary", label: "Diary", icon: BookOpen },
   { id: "goals", label: "Goals", icon: Target },
   { id: "schedule", label: "Schedule", icon: CalendarDays },
-  { id: "review", label: "Review", icon: RefreshCw, placeholder: true, phase: 5 },
+  { id: "review", label: "Review", icon: RefreshCw },
   { id: "mock", label: "Mock", icon: MessageSquare, placeholder: true, phase: 6 },
   { id: "stats", label: "Stats", icon: BarChart3 },
 ];

@@ -1,16 +1,33 @@
 import { useEffect, useState } from "react";
-import { Flame, Target, Clock } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { Flame, Target, Clock, Gauge } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+} from "recharts";
 import { fetchCollection, fetchLogs, today, type CollectionItem, type LogEntry, type ScheduleBlock } from "../lib/api";
 import { smartStreak, adherence } from "../lib/discipline";
 
 export default function Stats({ rev }: { rev: number }) {
   const [schedules, setSchedules] = useState<CollectionItem[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [roadmaps, setRoadmaps] = useState<CollectionItem[]>([]);
+  const [reviews, setReviews] = useState<CollectionItem[]>([]);
 
   useEffect(() => {
     fetchCollection("schedule").then(setSchedules);
     fetchLogs().then(setLogs);
+    fetchCollection("roadmaps").then(setRoadmaps);
+    fetchCollection("data/reviews").then(setReviews);
   }, [rev]);
 
   const allBlocks: ScheduleBlock[] = schedules.flatMap((s) => ((s.frontmatter as any).blocks ?? []) as ScheduleBlock[]);
@@ -18,6 +35,22 @@ export default function Stats({ rev }: { rev: number }) {
   const adhere = adherence(allBlocks);
   const totalActualMin = allBlocks.reduce((s, b) => s + (Number(b.actual_min) || 0), 0);
   const loggedHours = logs.reduce((s, l) => s + (Number((l.frontmatter as any).hours) || 0), 0);
+
+  // --- Readiness (breadth + consistency + depth) ---
+  const nodes = roadmaps.flatMap((r) => ((r.frontmatter as any).nodes ?? []) as { status?: string }[]);
+  const breadth = nodes.length ? Math.round((nodes.filter((n) => n.status === "done").length / nodes.length) * 100) : 0;
+  const consistency = adhere;
+  const reviewFm = reviews.map((r) => r.frontmatter as any);
+  const recall = reviewFm.length ? Math.round((reviewFm.filter((c) => c.status === "green").length / reviewFm.length) * 100) : 0;
+  const reviewed = reviewFm.filter((c) => Number(c.confidence) > 0);
+  const depth = reviewed.length ? Math.round((reviewed.reduce((s, c) => s + Number(c.confidence), 0) / reviewed.length / 4) * 100) : 0;
+  const readiness = Math.round((breadth + consistency + depth) / 3);
+  const radarData = [
+    { axis: "Breadth", value: breadth },
+    { axis: "Consistency", value: consistency },
+    { axis: "Recall", value: recall },
+    { axis: "Depth", value: depth },
+  ];
 
   const byTopic = new Map<string, number>();
   for (const b of allBlocks) {
@@ -38,6 +71,40 @@ export default function Stats({ rev }: { rev: number }) {
           value={`${(totalActualMin / 60 + loggedHours).toFixed(1)}h`}
         />
       </div>
+
+      {/* Readiness */}
+      <section className="rounded-xl border border-edge bg-panel p-5 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Gauge size={16} className="text-violet2" />
+          <h3 className="text-bright font-medium">Readiness</h3>
+          <span className="ml-auto text-2xl font-semibold text-bright">{readiness}%</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-[280px_1fr] gap-4 items-center">
+          <ResponsiveContainer width="100%" height={220}>
+            <RadarChart data={radarData} outerRadius={80}>
+              <PolarGrid stroke="#2a2750" />
+              <PolarAngleAxis dataKey="axis" tick={{ fill: "#8f8cb5", fontSize: 12 }} />
+              <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+              <Radar dataKey="value" stroke="#7f77dd" fill="#7f77dd" fillOpacity={0.4} />
+            </RadarChart>
+          </ResponsiveContainer>
+          <ul className="space-y-1.5 text-sm">
+            {radarData.map((d) => (
+              <li key={d.axis} className="flex items-center gap-3">
+                <span className="text-muted w-28">{d.axis}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-panel2 overflow-hidden">
+                  <div className="h-full bg-violet" style={{ width: `${d.value}%` }} />
+                </div>
+                <span className="text-soft w-10 text-right">{d.value}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="text-faint text-xs mt-3">
+          Breadth = roadmap nodes done · Consistency = schedule adherence · Recall = green review cards · Depth = avg
+          review confidence.
+        </p>
+      </section>
 
       <section className="rounded-xl border border-edge bg-panel p-5">
         <h3 className="text-bright font-medium mb-3">Time by topic</h3>
