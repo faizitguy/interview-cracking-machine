@@ -1,36 +1,207 @@
 @import "tailwindcss";
 
-/* Calm dark palette — matches the HLD architecture mockup. */
+/* ============================================================
+   Aurora Obsidian — design tokens
+   Obsidian base · warm amber→coral→iris aurora signature.
+   ============================================================ */
 @theme {
-  --color-ink: #0c0b1a;
-  --color-panel: #141329;
-  --color-panel2: #1a1833;
-  --color-edge: #2a2750;
-  --color-edge2: #322e5c;
-  --color-violet: #7f77dd;
-  --color-violet2: #8c84e8;
-  --color-teal: #3fcba4;
-  --color-bright: #f4f3fb;
-  --color-soft: #cfccf0;
-  --color-muted: #8f8cb5;
-  --color-faint: #5b5880;
+  --color-ink: #09080d;
+  --color-ink2: #0d0b13;
+  --color-panel: #141220;
+  --color-panel2: #1b1828;
+  --color-edge: #262134;
+  --color-edge2: #352d49;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-bright: #f8f6fc;
+  --color-soft: #d4cfe1;
+  --color-muted: #968ead;
+  --color-faint: #6a6486;
+
+  /* iris = cool AI accent (kept as `violet` so existing classes restyle) */
+  --color-violet: #8b7cff;
+  --color-violet2: #a99bff;
+  /* warm signature */
+  --color-amber: #ffb13d;
+  --color-coral: #ff5d8f;
+  /* semantic */
+  --color-teal: #46e0a8;
+  --color-bad: #ff6b6b;
+  --color-warn: #ffcf5c;
+
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html, body, #root {
-  height: 100%;
-}
+html, body, #root { height: 100%; }
+
 body {
   margin: 0;
   background: var(--color-ink);
   color: var(--color-soft);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Slim scrollbars for the dark theme. */
+/* Ambient aurora glows + faint grain, fixed behind everything. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 60rem at 12% -10%, rgba(255, 177, 61, 0.10), transparent 60%),
+    radial-gradient(55rem 55rem at 100% 8%, rgba(255, 93, 143, 0.12), transparent 55%),
+    radial-gradient(70rem 70rem at 70% 110%, rgba(139, 124, 255, 0.12), transparent 60%);
+}
+#root { position: relative; z-index: 1; }
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-edge) transparent;
+}
+
+::selection { background: rgba(255, 93, 143, 0.3); color: #fff; }
+
+:focus-visible { outline: 2px solid var(--color-violet); outline-offset: 2px; }
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+@layer utilities {
+  .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  .text-aurora {
+    background: linear-gradient(100deg, var(--color-amber), var(--color-coral) 52%, var(--color-violet2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Gradient hairline card (the premium border) */
+  .hairline {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--color-panel), var(--color-panel)) padding-box,
+      linear-gradient(135deg, rgba(255, 177, 61, 0.45), rgba(255, 93, 143, 0.3) 45%, rgba(139, 124, 255, 0.4)) border-box;
+  }
+
+  .glow-amber { box-shadow: 0 24px 60px -28px rgba(255, 177, 61, 0.55); }
+  .glow-coral { box-shadow: 0 24px 60px -26px rgba(255, 93, 143, 0.5); }
+  .glow-iris { box-shadow: 0 24px 60px -26px rgba(139, 124, 255, 0.5); }
+
+  /* Primary CTA — warm gradient, lift, sheen sweep */
+  .btn-primary {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(120deg, var(--color-amber), var(--color-coral));
+    color: #2a0f1a;
+    font-weight: 600;
+    transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease);
+  }
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 38px -10px rgba(255, 93, 143, 0.6);
+  }
+  .btn-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.45), transparent 70%);
+    transform: translateX(-160%);
+    transition: transform 0.7s var(--ease);
+  }
+  .btn-primary:hover:not(:disabled)::after { transform: translateX(160%); }
+  .btn-primary:disabled { opacity: 0.45; }
+
+  /* Cursor-tracked spotlight card (set --mx/--my via JS, falls back centered) */
+  .spotlight { position: relative; }
+  .spotlight::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(18rem 18rem at var(--mx, 50%) var(--my, 0%), rgba(255, 177, 61, 0.12), transparent 60%);
+    opacity: 0;
+    transition: opacity 0.3s var(--ease);
+    pointer-events: none;
+  }
+  .spotlight:hover::before { opacity: 1; }
+
+  /* Scroll-reveal */
+  .reveal { opacity: 0; transform: translateY(18px); }
+  .reveal.in { animation: revealUp 0.7s var(--ease) forwards; }
+
+  /* "Thinking / generating" shimmer text */
+  .shimmer {
+    background: linear-gradient(90deg, var(--color-faint) 0%, var(--color-bright) 50%, var(--color-faint) 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  .grid-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  /* Standard elevated card surface */
+  .card-base {
+    background: var(--color-panel);
+    border: 1px solid var(--color-edge);
+    border-radius: 1rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 24px 50px -34px rgba(0, 0, 0, 0.9);
+  }
+}
+
+/* ============================================================
+   Aurora orb — the living "AI is here" element
+   ============================================================ */
+.orb {
+  position: relative;
+  border-radius: 9999px;
+  background:
+    radial-gradient(closest-side at 35% 30%, rgba(255, 177, 61, 0.95), transparent 70%),
+    radial-gradient(closest-side at 70% 65%, rgba(255, 93, 143, 0.95), transparent 70%),
+    radial-gradient(closest-side at 50% 50%, rgba(139, 124, 255, 0.9), transparent 75%);
+  filter: blur(2px) saturate(1.1);
+  animation: auroraDrift 7s ease-in-out infinite;
+}
+.orb-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1.5px solid rgba(255, 93, 143, 0.5);
+}
+.orb.speaking .orb-ring { animation: pulseRing 1.4s var(--ease) infinite; }
+.orb.listening { animation-duration: 3s; }
+
+@keyframes auroraDrift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, -4%) scale(1.05); }
+  66% { transform: translate(-3%, 3%) scale(0.97); }
+}
+@keyframes pulseRing {
+  0% { transform: scale(0.92); opacity: 0.7; }
+  80%, 100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes revealUp { to { opacity: 1; transform: none; } }
+@keyframes floaty { 50% { transform: translateY(-9px); } }
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
 }

@@ -11,7 +11,7 @@ export default function SetupBanner({ error }: { error?: string }) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
   return (
-    <div className="flex items-start gap-3 border-b border-yellow-500/30 bg-yellow-500/10 px-6 py-3 text-sm">
+    <div className="flex items-start gap-3 border-b border-warn/30 bg-warn/10 px-6 py-3 text-sm">
       <AlertTriangle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
       <div className="text-yellow-100/90">
         <strong>AI engine unavailable.</strong> Your data is safe and fully viewable — only AI actions are

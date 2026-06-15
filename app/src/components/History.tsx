@@ -103,14 +103,14 @@ export default function History({ rev }: { rev: number }) {
         </button>
 
         <div className="flex items-center gap-3 flex-wrap mb-1">
-          <h2 className="text-2xl font-semibold text-bright">{label(open.type)}</h2>
+          <h2 className="font-display text-3xl font-bold text-bright">{label(open.type)}</h2>
           <span className="text-faint text-sm">{open.level} · {open.date}</span>
-          <span className={`ml-auto text-3xl font-bold ${SCORE_COLOR(open.avg)}`}>{open.avg}<span className="text-faint text-base font-normal">/4</span></span>
+          <span className={`ml-auto font-display text-4xl font-bold tnum ${SCORE_COLOR(open.avg)}`}>{open.avg}<span className="text-faint text-base font-normal">/4</span></span>
         </div>
         <p className="text-soft mb-5">{open.verdict}</p>
 
         {/* rubric bars */}
-        <div className="rounded-xl border border-edge bg-panel p-5 mb-5">
+        <div className="rounded-xl card-base p-5 mb-5">
           <div className="space-y-2.5">
             {DIMS.map((d) => (
               <div key={d} className="flex items-center gap-3 text-sm">
@@ -144,8 +144,9 @@ export default function History({ rev }: { rev: number }) {
   // ---- List view ----
   return (
     <div className="max-w-4xl mx-auto p-8">
-      <h2 className="text-2xl font-semibold text-bright mb-1">History</h2>
-      <p className="text-muted text-sm mb-6">Every mock you've taken — review the feedback, study the transcript, then run it again and watch the line climb.</p>
+      <p className="text-amber font-mono text-xs uppercase tracking-[0.2em] mb-2">Your progress</p>
+      <h2 className="font-display text-4xl font-bold text-bright mb-2">Interview <span className="text-aurora">history</span></h2>
+      <p className="text-muted mb-7 max-w-xl">Every mock you've taken — review the honest feedback, study the transcript, then run it again and watch the line climb.</p>
 
       {attempts.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-edge p-10 text-center text-muted">
@@ -159,25 +160,25 @@ export default function History({ rev }: { rev: number }) {
             <Stat icon={<CalendarDays size={16} className="text-violet2" />} label="Interviews" value={`${attempts.length}`} />
           </div>
 
-          <div className="rounded-xl border border-edge bg-panel p-4 mb-6">
+          <div className="rounded-xl card-base p-4 mb-6">
             <h3 className="text-bright font-medium mb-3">Progress</h3>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={chart} margin={{ left: -20 }}>
                 <defs>
                   <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7f77dd" stopOpacity={0.5} />
-                    <stop offset="100%" stopColor="#7f77dd" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#8b7cff" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#8b7cff" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2750" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#262134" />
                 <XAxis dataKey="n" tick={{ fill: "#8f8cb5", fontSize: 11 }} />
                 <YAxis domain={[1, 4]} tick={{ fill: "#8f8cb5", fontSize: 11 }} />
                 <Tooltip
-                  contentStyle={{ background: "#141329", border: "1px solid #2a2750", borderRadius: 8, color: "#e8e6f5" }}
+                  contentStyle={{ background: "#141220", border: "1px solid #262134", borderRadius: 8, color: "#f8f6fc" }}
                   formatter={(v: any) => [`${v}/4`, "Score"]}
                   labelFormatter={(l, p: any) => `${l} · ${p?.[0]?.payload?.round ?? ""} · ${p?.[0]?.payload?.date ?? ""}`}
                 />
-                <Area type="monotone" dataKey="score" stroke="#7f77dd" strokeWidth={2} fill="url(#g)" dot={{ r: 3, fill: "#7f77dd" }} />
+                <Area type="monotone" dataKey="score" stroke="#8b7cff" strokeWidth={2} fill="url(#g)" dot={{ r: 3, fill: "#8b7cff" }} />
               </AreaChart>
             </ResponsiveContainer>
             {best && <p className="text-faint text-xs mt-2">Best so far: {best.avg}/4 on {label(best.type)} ({best.date}).</p>}
@@ -189,7 +190,7 @@ export default function History({ rev }: { rev: number }) {
               <li key={a.file}>
                 <button
                   onClick={() => setOpenFile(a.file)}
-                  className="w-full flex items-center gap-4 rounded-xl border border-edge bg-panel hover:border-violet transition-colors px-4 py-3 text-left"
+                  className="w-full flex items-center gap-4 rounded-xl card-base hover:border-violet transition-colors px-4 py-3 text-left"
                 >
                   <span className={`text-2xl font-bold w-14 shrink-0 ${SCORE_COLOR(a.avg)}`}>{a.avg}</span>
                   <span className="min-w-0 flex-1">
@@ -210,7 +211,7 @@ export default function History({ rev }: { rev: number }) {
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-edge bg-panel p-4">
+    <div className="rounded-xl card-base p-4">
       <div className="flex items-center gap-2 text-faint text-[11px] uppercase tracking-wide">{icon} {label}</div>
       <div className="text-bright text-2xl font-semibold mt-1.5">{value}</div>
     </div>
@@ -236,7 +237,7 @@ function Transcript({ text }: { text: string }) {
         const clean = b.replace(/^\*\*(Interviewer|You):\*\*\s*/, "");
         return (
           <div key={i} className={you ? "text-right" : ""}>
-            <div className={`inline-block rounded-xl px-3.5 py-2 text-sm whitespace-pre-wrap text-left max-w-[88%] ${you ? "bg-violet text-white" : "bg-panel border border-edge text-soft"}`}>
+            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap text-left max-w-[88%] ${you ? "bg-violet text-white" : "card-base text-soft"}`}>
               {clean}
             </div>
           </div>

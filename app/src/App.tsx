@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Send, Loader2, Square, Mic, Volume2, Trophy, History as HistoryIcon, Plus } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { askStream, eventText, fetchCollection, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type CollectionItem, type Round } from "./lib/api";
+import { askStream, eventText, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
 import ResumeUpload from "./components/ResumeUpload";
 import SetupBanner from "./components/SetupBanner";
 import History from "./components/History";
+import Landing from "./components/Landing";
 
 const LEVELS = ["junior", "mid", "senior", "staff"];
 
@@ -26,14 +26,13 @@ export default function App() {
   const [level, setLevel] = useState("mid");
   const [round, setRound] = useState("general");
   const [rounds, setRounds] = useState<Round[]>([]);
-  const [view, setView] = useState<"interview" | "history">("interview");
+  const [view, setView] = useState<"landing" | "interview" | "history">("landing");
   const [historyRev, setHistoryRev] = useState(0);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [interim, setInterim] = useState("");
-  const [mocks, setMocks] = useState<CollectionItem[]>([]);
   const [claudeOk, setClaudeOk] = useState(true);
   const [claudeErr, setClaudeErr] = useState<string>();
   const [resumeName, setResumeName] = useState<string>();
@@ -56,10 +55,6 @@ export default function App() {
     const t = setInterval(poll, 15000);
     return () => clearInterval(t);
   }, []);
-
-  useEffect(() => {
-    fetchCollection("mocks").then(setMocks);
-  }, [stage]);
 
   useEffect(() => {
     fetchRounds().then((r) => {
@@ -167,28 +162,22 @@ export default function App() {
       .join("\n\n");
     if (transcript) await appendFile(`mocks/${file}`, `\n\n## Transcript\n\n${transcript}\n`);
     setStage("scored");
-    fetchCollection("mocks").then(setMocks);
     setHistoryRev((r) => r + 1);
   };
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
 
-  const trend = mocks
-    .map((m) => {
-      const r = (m.frontmatter as any).rubric ?? {};
-      const vals = Object.values(r).map(Number).filter((n) => !isNaN(n));
-      const avg = vals.length ? +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2) : 0;
-      return { date: String((m.frontmatter as any).date ?? m.file).slice(0, 10), score: avg };
-    })
-    .filter((d) => d.score > 0);
+  if (view === "landing") return <Landing onStart={() => setView("interview")} />;
 
   const nav = (
-    <header className="shrink-0 flex items-center gap-3 border-b border-edge bg-panel/60 backdrop-blur px-5 py-3">
-      <div className="flex items-center gap-2">
-        <div className="h-6 w-6 rounded-lg bg-violet grid place-items-center text-white text-xs font-bold">I</div>
-        <span className="text-bright font-semibold text-sm">Interview Cracking Machine</span>
-      </div>
+    <header className="shrink-0 flex items-center gap-3 border-b border-edge/70 bg-ink/70 backdrop-blur-md px-5 py-3">
+      <button onClick={() => setView("landing")} className="flex items-center gap-2.5 group">
+        <span className="orb h-6 w-6"><span className="orb-ring" /></span>
+        <span className="font-display text-bright font-semibold text-sm group-hover:text-aurora transition-colors">
+          Interview Cracking Machine
+        </span>
+      </button>
       <div className="ml-auto flex items-center gap-1">
         <button onClick={() => setView("interview")} className={navBtn(view === "interview")}>
           <Plus size={14} /> New interview
@@ -225,26 +214,39 @@ export default function App() {
         {nav}
         <div className="flex-1 overflow-y-auto">
         {!claudeOk && <SetupBanner error={claudeErr} />}
-        <div className="max-w-2xl mx-auto px-6 py-12">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="h-9 w-9 rounded-xl bg-violet grid place-items-center text-white font-bold">I</div>
-            <h1 className="text-2xl font-semibold text-bright">Interview Cracking Machine</h1>
-          </div>
-          <p className="text-muted mb-8">
-            Upload your resume and take a realistic spoken mock interview. The interviewer mixes questions about
-            your actual experience with the top questions for your role, then scores you honestly.
-          </p>
-
+        <div className="max-w-xl mx-auto px-6 py-12">
           {stage === "scored" && (
-            <div className="rounded-xl border border-teal/40 bg-panel p-5 mb-8">
-              <div className="flex items-center gap-2 text-teal mb-2">
-                <Trophy size={16} /> <span className="font-medium">Your result</span>
+            <div className="hairline rounded-2xl p-6 mb-8 glow-coral relative overflow-hidden">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="orb h-9 w-9"><span className="orb-ring" /></span>
+                <span className="font-display font-semibold text-bright">Your result is in</span>
+                <Trophy size={16} className="ml-auto text-amber" />
               </div>
-              <p className="text-soft text-sm whitespace-pre-wrap">{turns[turns.length - 1]?.text}</p>
+              <p className="text-soft text-sm whitespace-pre-wrap leading-relaxed">{turns[turns.length - 1]?.text}</p>
+              <button
+                onClick={() => {
+                  setView("history");
+                  setHistoryRev((r) => r + 1);
+                }}
+                className="mt-4 text-sm text-violet2 hover:text-bright inline-flex items-center gap-1.5"
+              >
+                See full feedback &amp; transcript in History <HistoryIcon size={14} />
+              </button>
             </div>
           )}
 
-          <div className="space-y-5">
+          <p className="text-amber font-mono text-xs uppercase tracking-[0.2em] mb-2">
+            {stage === "scored" ? "Go again" : "New session"}
+          </p>
+          <h1 className="font-display text-4xl font-bold text-bright leading-tight">
+            Set up your <span className="text-aurora">mock interview</span>
+          </h1>
+          <p className="text-muted mt-3 mb-8 leading-relaxed">
+            Pick a round and a voice. Your interviewer reads your résumé and digs into the real projects and
+            skills you've listed — then scores you honestly.
+          </p>
+
+          <div className="card-base p-6 space-y-5">
             <div>
               <label className="block text-faint text-[11px] uppercase tracking-wide mb-2">1 · Your resume</label>
               <ResumeUpload current={resumeName} onUploaded={setResumeName} />
@@ -255,7 +257,7 @@ export default function App() {
                 <select
                   value={round}
                   onChange={(e) => setRound(e.target.value)}
-                  className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
+                  className="w-full rounded-xl border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft focus:border-violet focus:outline-none"
                 >
                   {rounds.map((r) => (
                     <option key={r.id} value={r.id} className="bg-panel">{r.label}</option>
@@ -276,7 +278,7 @@ export default function App() {
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
                   placeholder="e.g. Senior Frontend Engineer"
-                  className="w-full rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none"
+                  className="w-full rounded-xl border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none"
                 />
               </div>
             </div>
@@ -323,31 +325,17 @@ export default function App() {
               </p>
             </div>
 
-            <button
-              onClick={start}
-              disabled={!canStart}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-violet px-4 py-3 font-medium text-white hover:bg-violet2 disabled:opacity-50"
-            >
-              <Play size={16} /> {stage === "scored" ? "Start another interview" : "Start interview"}
-            </button>
-            {!hasResume && !resumeName && <p className="text-faint text-xs text-center">Upload a resume to begin.</p>}
           </div>
 
-          {trend.length > 0 && (
-            <div className="mt-10">
-              <h3 className="text-faint text-xs uppercase tracking-wide mb-3">Score trend</h3>
-              <div className="rounded-xl border border-edge bg-panel p-4">
-                <ResponsiveContainer width="100%" height={200}>
-                  <LineChart data={trend} margin={{ left: -20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2a2750" />
-                    <XAxis dataKey="date" tick={{ fill: "#8f8cb5", fontSize: 11 }} />
-                    <YAxis domain={[1, 4]} tick={{ fill: "#8f8cb5", fontSize: 11 }} />
-                    <Tooltip contentStyle={{ background: "#141329", border: "1px solid #2a2750", borderRadius: 8, color: "#e8e6f5" }} />
-                    <Line type="monotone" dataKey="score" stroke="#3fcba4" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+          <button
+            onClick={start}
+            disabled={!canStart}
+            className="btn-primary w-full flex items-center justify-center gap-2 rounded-xl px-4 py-4 text-base mt-6"
+          >
+            <Play size={17} /> {stage === "scored" ? "Start another interview" : "Start interview"}
+          </button>
+          {!hasResume && !resumeName && (
+            <p className="text-faint text-xs text-center mt-3">Upload a résumé above to begin.</p>
           )}
         </div>
         </div>
@@ -359,35 +347,45 @@ export default function App() {
   return (
     <div className="h-full flex flex-col bg-ink text-soft">
       {nav}
-      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-bright font-semibold">
-          {rounds.find((r) => r.id === round)?.label ?? "Interview"} · {level}
+      <div className="flex-1 flex flex-col min-h-0 max-w-3xl mx-auto w-full px-6 py-5">
+      <div className="flex items-center gap-3 mb-5">
+        <span className={`orb h-10 w-10 shrink-0 ${voice.speaking ? "speaking" : ""} ${voice.listening ? "listening" : ""}`}>
+          <span className="orb-ring" />
         </span>
-        <span className="font-mono text-lg text-violet2 tabular-nums">{mm}:{ss}</span>
-        {voice.speaking && (
-          <span className="flex items-center gap-1.5 text-teal text-sm">
-            <Volume2 size={15} className="animate-pulse" /> speaking
-          </span>
-        )}
-        <button onClick={endAndScore} disabled={busy} className="ml-auto flex items-center gap-1.5 rounded-lg bg-teal px-3 py-1.5 text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50">
-          <Square size={14} /> End &amp; score
+        <div className="leading-tight">
+          <div className="font-display font-semibold text-bright">
+            {rounds.find((r) => r.id === round)?.label ?? "Interview"}
+            <span className="text-faint font-normal font-sans"> · {level}</span>
+          </div>
+          <div className="text-xs h-4">
+            {voice.speaking ? (
+              <span className="text-coral flex items-center gap-1"><Volume2 size={12} /> speaking…</span>
+            ) : voice.listening ? (
+              <span className="text-teal flex items-center gap-1"><Mic size={12} /> listening…</span>
+            ) : (
+              <span className="text-faint">your turn</span>
+            )}
+          </div>
+        </div>
+        <span className="ml-auto font-mono text-lg text-soft tnum">{mm}:{ss}</span>
+        <button onClick={endAndScore} disabled={busy} className="flex items-center gap-1.5 rounded-xl border border-edge2 bg-panel px-3.5 py-2 text-sm font-medium text-soft hover:border-coral hover:text-coral transition-colors disabled:opacity-50">
+          <Square size={13} /> End &amp; score
         </button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-1">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 pr-1 pb-2">
         {turns.map((t, i) => (
-          <div key={i} className={t.role === "candidate" ? "text-right" : ""}>
-            <div className={`inline-block rounded-xl px-4 py-2.5 text-sm whitespace-pre-wrap text-left max-w-[88%] ${t.role === "candidate" ? "bg-violet text-white" : "bg-panel border border-edge text-soft"}`}>
-              {t.text || (busy ? <Loader2 size={14} className="animate-spin" /> : "…")}
+          <div key={i} className={`reveal in ${t.role === "candidate" ? "text-right" : ""}`}>
+            <div className={`inline-block rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap text-left max-w-[85%] leading-relaxed ${t.role === "candidate" ? "bg-violet text-white glow-iris" : "card-base text-soft"}`}>
+              {t.text || (busy ? <span className="shimmer">thinking…</span> : "…")}
             </div>
           </div>
         ))}
       </div>
 
       {(voice.listening || interim) && (
-        <p className="mt-3 text-sm text-teal">
-          <Mic size={13} className="inline mr-1.5 animate-pulse" />
+        <p className="mt-3 text-sm text-teal flex items-center gap-1.5">
+          <Mic size={13} className="animate-pulse" />
           {interim || "Listening…"}
         </p>
       )}
@@ -396,7 +394,7 @@ export default function App() {
           <button
             onClick={() => (voice.listening ? voice.stopListen() : listenForReply())}
             title="Push to talk (interrupts the interviewer)"
-            className={`rounded-lg border px-3 ${voice.listening ? "border-teal text-teal" : "border-edge2 text-soft"}`}
+            className={`rounded-xl border px-3.5 transition-colors ${voice.listening ? "border-teal text-teal bg-teal/5" : "border-edge2 text-soft hover:border-violet"}`}
           >
             <Mic size={16} />
           </button>
@@ -407,9 +405,9 @@ export default function App() {
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Type your answer (or use the mic)…"
           disabled={busy}
-          className="flex-1 rounded-lg border border-edge bg-panel2 px-3 py-2.5 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none disabled:opacity-60"
+          className="flex-1 rounded-xl border border-edge bg-panel2 px-4 py-3 text-sm text-soft placeholder:text-faint focus:border-violet focus:outline-none disabled:opacity-60"
         />
-        <button onClick={() => send()} disabled={busy || !input.trim()} className="rounded-lg bg-violet px-4 text-white disabled:opacity-50 hover:bg-violet2">
+        <button onClick={() => send()} disabled={busy || !input.trim()} className="btn-primary rounded-xl px-5">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         </button>
       </div>

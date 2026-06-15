@@ -43,7 +43,7 @@ export default function ResumeUpload({
           e.preventDefault();
           handle(e.dataTransfer.files?.[0]);
         }}
-        className="cursor-pointer rounded-xl border border-dashed border-edge2 bg-panel hover:border-violet transition-colors p-6 text-center"
+        className="cursor-pointer rounded-2xl border border-dashed border-edge2 bg-panel2/40 hover:border-coral transition-colors p-6 text-center"
       >
         <input
           ref={inputRef}
@@ -62,7 +62,7 @@ export default function ResumeUpload({
           </div>
         ) : (
           <div className="text-muted">
-            <Upload size={22} className="mx-auto mb-2 text-violet2" />
+            <Upload size={22} className="mx-auto mb-2 text-amber" />
             <div className="text-soft font-medium">Drop your resume here, or click to choose</div>
             <div className="text-faint text-xs mt-1 flex items-center justify-center gap-1">
               <FileText size={12} /> PDF, DOCX, or TXT
