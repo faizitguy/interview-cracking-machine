@@ -85,12 +85,14 @@ docs/         # spec, schema, architecture
 
 The bridge spawns the local `claude` CLI (no API key) — see [server/README.md](server/README.md) for the exact command and the `/ask`, `/api/logs`, `/api/health`, `/watch` endpoints.
 
-**UI (`app/`, built in Phase 2 — Vite + React 19 + Tailwind v4):**
+**UI (`app/`, Vite + React 19 + Tailwind v4 + Recharts):**
 - `cd app && npm install` then `npm run dev` — serves http://localhost:5317.
 - `npm run build` (`tsc --noEmit && vite build`) and `npm run typecheck`.
 - Vite proxies `/api`, `/ask`, and `/watch` (ws) to the backend on :4317, so **run the backend too**. No test runner yet.
 
-Screens live in `app/src/screens/`; the shell is `App.tsx` (sidebar + ⌘K assistant). All server calls go through `app/src/lib/api.ts` (`askStream`) and live updates through `app/src/lib/useWatch.ts`. Theme tokens are in `app/src/index.css`.
+Screens live in `app/src/screens/` (Today, Diary, Goals, Schedule, Review, Mock, Stats); the shell is `App.tsx` (sidebar + ⌘K assistant, ⌘1–7 to switch screens). All server calls go through `app/src/lib/api.ts` (`askStream`, `scheduleBlock`, `rateReview`, …); live updates through `app/src/lib/useWatch.ts`. Theme tokens in `app/src/index.css`. Discipline/readiness math in `app/src/lib/discipline.ts`; SRS scheduling in `app/src/lib/review.ts`; browser voice in `app/src/lib/useVoice.ts`.
+
+**Desktop (Tauri, Phase 7):** scaffolded in `app/src-tauri/` — `npm run tauri:dev` / `npm run tauri:build`. Requires the Rust toolchain (`rustup`) which is **not installed yet**; see [app/src-tauri/README.md](app/src-tauri/README.md). Voice (Phase 6b) uses the browser Web Speech API + SpeechSynthesis (zero-setup); local whisper.cpp/Kokoro is a future swap behind `useVoice`.
 
 
 Instructions:
