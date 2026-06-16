@@ -26,6 +26,8 @@ export function useVoice() {
   const [voiceName, setVoiceName] = useState("af_heart");
 
   const recRef = useRef<any>(null);
+  const silenceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stoppedRef = useRef(false); // true = we stopped on purpose (don't auto-restart)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Pipeline: each queued sentence's audio is fetched immediately (ahead of
   // playback) so the next sentence is ready by the time the current finishes —
@@ -181,44 +183,142 @@ export function useVoice() {
     });
   }, []);
 
-  /** Listen for one candidate turn; resolves the final transcript via onFinal. */
+  /**
+   * Listen for one candidate turn.
+   *
+   * The hard part with the Web Speech API is end-of-turn detection. With
+   * `continuous = false` the recognizer ends the session at the first short
+   * pause, so a 1–2s "let me think" gap gets mistaken for "I'm done" and a
+   * half-finished answer is submitted — the AI then talks over you.
+   *
+   * Instead we run `continuous = true` (the session stays open across pauses)
+   * and decide the turn is over ourselves: a silence timer that resets on every
+   * speech event and only fires after a real ~2.5s gap. We also auto-restart if
+   * Chrome ends the session on its own (it times out long-running sessions), so
+   * the mic never silently dies mid-interview.
+   */
   const listen = useCallback(
     (onFinal: (text: string) => void, onInterim?: (text: string) => void) => {
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SR) return;
-      cancelSpeak(); // barge-in
+      cancelSpeak(); // barge-in: stop any interviewer audio the moment we listen
+
+      // Tear down any previous recognizer cleanly.
+      if (silenceRef.current) clearTimeout(silenceRef.current);
+      if (recRef.current) {
+        try {
+          recRef.current.onend = null;
+          recRef.current.onresult = null;
+          recRef.current.abort();
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const ENDPOINT_SILENCE_MS = 3500; // how long a pause counts as "I'm done"
       const r = new SR();
       r.lang = "en-US";
       r.interimResults = true;
-      r.continuous = false;
+      r.continuous = true;
       let finalText = "";
+      let done = false;
+
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (silenceRef.current) clearTimeout(silenceRef.current);
+        stoppedRef.current = true; // we're stopping on purpose now
+        try {
+          r.onresult = null;
+          r.onend = null;
+          r.stop();
+        } catch {
+          /* ignore */
+        }
+        setListening(false);
+        const text = finalText.trim();
+        if (text) onFinal(text);
+      };
+
+      // Reset the "are they done?" countdown on any speech activity.
+      const armSilence = () => {
+        if (silenceRef.current) clearTimeout(silenceRef.current);
+        silenceRef.current = setTimeout(finish, ENDPOINT_SILENCE_MS);
+      };
+
       r.onresult = (e: any) => {
         let interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) finalText += t;
+          if (e.results[i].isFinal) finalText += t + " ";
           else interim += t;
         }
-        if (interim && onInterim) onInterim(interim);
+        if (onInterim) onInterim((finalText + interim).trim());
+        // Only start counting down once we've actually heard something, so a
+        // candidate who takes a few seconds to begin isn't cut off.
+        if (finalText.trim() || interim.trim()) armSilence();
       };
-      r.onerror = () => setListening(false);
+
+      r.onerror = (ev: any) => {
+        const err = ev?.error;
+        if (err === "not-allowed" || err === "service-not-allowed") {
+          // No mic permission — give up gracefully (typing still works).
+          stoppedRef.current = true;
+          setListening(false);
+        }
+        // 'no-speech' / 'aborted' / 'network' are transient: let onend restart.
+      };
+
       r.onend = () => {
-        setListening(false);
-        if (finalText.trim()) onFinal(finalText.trim());
+        if (done || stoppedRef.current) {
+          setListening(false);
+          return;
+        }
+        // Chrome ended the session on its own but the candidate isn't finished —
+        // restart so listening continues seamlessly across the gap.
+        try {
+          r.start();
+        } catch {
+          /* a start() race; the next onend will retry */
+        }
       };
+
       recRef.current = r;
+      stoppedRef.current = false;
       setListening(true);
-      r.start();
+      try {
+        r.start();
+      } catch {
+        /* already started */
+      }
     },
     [cancelSpeak],
   );
 
   const stopListen = useCallback(() => {
-    recRef.current?.stop();
+    stoppedRef.current = true; // prevent the onend auto-restart
+    if (silenceRef.current) clearTimeout(silenceRef.current);
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
     setListening(false);
   }, []);
 
-  useEffect(() => () => cancelSpeak(), [cancelSpeak]);
+  useEffect(
+    () => () => {
+      cancelSpeak();
+      stoppedRef.current = true;
+      if (silenceRef.current) clearTimeout(silenceRef.current);
+      try {
+        recRef.current?.abort();
+      } catch {
+        /* ignore */
+      }
+    },
+    [cancelSpeak],
+  );
 
   return {
     sttSupported,

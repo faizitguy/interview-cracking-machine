@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Trophy, History as HistoryIcon, Plus } from "lucide-react";
+import { Trophy, History as HistoryIcon } from "lucide-react";
 import { askStream, eventText, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type Round } from "./lib/api";
 import { useVoice } from "./lib/useVoice";
 import SetupBanner from "./components/SetupBanner";
@@ -7,11 +7,7 @@ import SetupWizard from "./components/SetupWizard";
 import History from "./components/History";
 import Landing from "./components/Landing";
 import LiveCall from "./components/LiveCall";
-
-const navBtn = (active: boolean) =>
-  `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
-    active ? "bg-edge text-bright" : "text-muted hover:text-soft hover:bg-panel2"
-  }`;
+import TopNav from "./components/TopNav";
 
 interface Turn {
   role: "interviewer" | "candidate";
@@ -195,28 +191,16 @@ export default function App() {
   if (view === "landing") return <Landing onStart={() => setView("interview")} />;
 
   const nav = (
-    <header className="shrink-0 flex items-center gap-3 border-b border-edge/70 bg-ink/70 backdrop-blur-md px-5 py-3">
-      <button onClick={() => setView("landing")} className="flex items-center gap-2.5 group">
-        <span className="orb h-6 w-6"><span className="orb-ring" /></span>
-        <span className="font-display text-bright font-semibold text-sm group-hover:text-aurora transition-colors">
-          Interview Cracking Machine
-        </span>
-      </button>
-      <div className="ml-auto flex items-center gap-1">
-        <button onClick={() => setView("interview")} className={navBtn(view === "interview")}>
-          <Plus size={14} /> New interview
-        </button>
-        <button
-          onClick={() => {
-            setView("history");
-            setHistoryRev((r) => r + 1);
-          }}
-          className={navBtn(view === "history")}
-        >
-          <HistoryIcon size={14} /> History
-        </button>
-      </div>
-    </header>
+    <TopNav
+      view={view}
+      claudeOk={claudeOk}
+      ready={hasResume || !!resumeName}
+      onBrand={() => setView("landing")}
+      onNavigate={(v) => {
+        setView(v);
+        if (v === "history") setHistoryRev((r) => r + 1);
+      }}
+    />
   );
 
   if (view === "history") {
