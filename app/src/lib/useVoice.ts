@@ -27,6 +27,7 @@ export function useVoice() {
 
   const recRef = useRef<any>(null);
   const silenceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null); // "said nothing at all" timer
   const stoppedRef = useRef(false); // true = we stopped on purpose (don't auto-restart)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   // Pipeline: each queued sentence's audio is fetched immediately (ahead of
@@ -198,13 +199,19 @@ export function useVoice() {
    * the mic never silently dies mid-interview.
    */
   const listen = useCallback(
-    (onFinal: (text: string) => void, onInterim?: (text: string) => void) => {
+    (
+      onFinal: (text: string) => void,
+      onInterim?: (text: string) => void,
+      onSilence?: () => void, // candidate said nothing at all for `idleMs`
+      idleMs = 12000,
+    ) => {
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SR) return;
       cancelSpeak(); // barge-in: stop any interviewer audio the moment we listen
 
       // Tear down any previous recognizer cleanly.
       if (silenceRef.current) clearTimeout(silenceRef.current);
+      if (idleRef.current) clearTimeout(idleRef.current);
       if (recRef.current) {
         try {
           recRef.current.onend = null;
@@ -222,11 +229,13 @@ export function useVoice() {
       r.continuous = true;
       let finalText = "";
       let done = false;
+      let heard = false; // has the candidate produced ANY speech this turn?
 
       const finish = () => {
         if (done) return;
         done = true;
         if (silenceRef.current) clearTimeout(silenceRef.current);
+        if (idleRef.current) clearTimeout(idleRef.current);
         stoppedRef.current = true; // we're stopping on purpose now
         try {
           r.onresult = null;
@@ -246,6 +255,31 @@ export function useVoice() {
         silenceRef.current = setTimeout(finish, ENDPOINT_SILENCE_MS);
       };
 
+      // Separate from the end-of-turn timer above: this fires when the candidate
+      // says NOTHING at all for a while. We hand the turn back (without a
+      // submitted answer) so the interviewer can check in instead of the mic
+      // listening forever to silence. Keeps counting across Chrome's auto
+      // session restarts; cancelled the instant any speech is heard.
+      const armIdle = () => {
+        if (!onSilence) return;
+        if (idleRef.current) clearTimeout(idleRef.current);
+        idleRef.current = setTimeout(() => {
+          if (done || heard) return;
+          done = true;
+          stoppedRef.current = true; // don't auto-restart on the resulting onend
+          if (silenceRef.current) clearTimeout(silenceRef.current);
+          try {
+            r.onresult = null;
+            r.onend = null;
+            r.stop();
+          } catch {
+            /* ignore */
+          }
+          setListening(false);
+          onSilence();
+        }, idleMs);
+      };
+
       r.onresult = (e: any) => {
         let interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -254,9 +288,15 @@ export function useVoice() {
           else interim += t;
         }
         if (onInterim) onInterim((finalText + interim).trim());
-        // Only start counting down once we've actually heard something, so a
-        // candidate who takes a few seconds to begin isn't cut off.
-        if (finalText.trim() || interim.trim()) armSilence();
+        // The candidate is actually talking now: cancel the "are you there?"
+        // idle timer and switch to end-of-turn detection. We only start the
+        // end-of-turn countdown once we've heard something, so a candidate who
+        // takes a few seconds to begin isn't cut off mid-thought.
+        if (finalText.trim() || interim.trim()) {
+          heard = true;
+          if (idleRef.current) clearTimeout(idleRef.current);
+          armSilence();
+        }
       };
 
       r.onerror = (ev: any) => {
@@ -286,6 +326,7 @@ export function useVoice() {
       recRef.current = r;
       stoppedRef.current = false;
       setListening(true);
+      armIdle(); // start the silent-candidate countdown now
       try {
         r.start();
       } catch {
@@ -298,6 +339,7 @@ export function useVoice() {
   const stopListen = useCallback(() => {
     stoppedRef.current = true; // prevent the onend auto-restart
     if (silenceRef.current) clearTimeout(silenceRef.current);
+    if (idleRef.current) clearTimeout(idleRef.current);
     try {
       recRef.current?.stop();
     } catch {
@@ -311,6 +353,7 @@ export function useVoice() {
       cancelSpeak();
       stoppedRef.current = true;
       if (silenceRef.current) clearTimeout(silenceRef.current);
+      if (idleRef.current) clearTimeout(idleRef.current);
       try {
         recRef.current?.abort();
       } catch {

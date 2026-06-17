@@ -3,6 +3,7 @@ import {
   Mic, MicOff, Video, VideoOff, PhoneOff, MessageSquareText, X, Send, Loader2, Volume2, Dot,
 } from "lucide-react";
 import RobotAvatar from "./RobotAvatar";
+import ConnectingOverlay from "./ConnectingOverlay";
 import type { useVoice } from "../lib/useVoice";
 
 interface Turn {
@@ -23,6 +24,8 @@ interface Props {
   send: (t?: string) => void;
   listenForReply: () => void;
   onEnd: () => void;
+  onRetry: () => void;
+  onCancel: () => void;
   micMuted: boolean;
   setMicMuted: (b: boolean) => void;
 }
@@ -79,6 +82,19 @@ export default function LiveCall(p: Props) {
   const listening = p.voice.listening || !!p.interim;
   const caption = speaking ? lastInterviewer : listening ? p.interim || "Listening…" : "";
 
+  // --- Opening "connecting" phase ----------------------------------------
+  // The interview has truly started once the candidate replies, or the
+  // interviewer says its first real (non-error) words. Until then we cover the
+  // stage with a setup animation. Errors (or a silent empty response) flip the
+  // overlay into a retry state instead of leaving a dead screen.
+  const started =
+    p.turns.some((t) => t.role === "candidate") ||
+    p.turns.some((t) => t.role === "interviewer" && t.text.trim() && !t.text.startsWith("✗"));
+  const errTurn = p.turns.find((t) => t.role === "interviewer" && t.text.startsWith("✗"))?.text;
+  const stalled = !started && !p.busy && !errTurn && p.turns.length > 0; // opening run finished with nothing
+  const overlayError = !started ? errTurn ?? (stalled ? "✗ The interviewer didn't respond — let's try again." : null) : null;
+  const showConnecting = !started && (p.busy || !!overlayError);
+
   return (
     <div className="h-full flex flex-col bg-ink">
       {/* top bar */}
@@ -123,6 +139,9 @@ export default function LiveCall(p: Props) {
             </Tile>
           </div>
 
+          {showConnecting && (
+            <ConnectingOverlay error={overlayError} onRetry={p.onRetry} onCancel={p.onCancel} />
+          )}
         </div>
 
         {/* transcript drawer */}
