@@ -43,6 +43,17 @@ export default function App() {
   busyRef.current = busy;
   const stageRef = useRef(stage);
   stageRef.current = stage;
+  const idleNudges = useRef(0); // how many times we've checked in on a silent candidate
+  const inputRef = useRef("");
+  inputRef.current = input;
+
+  // What the interviewer says when the candidate goes quiet — escalating, like a
+  // real interviewer: first offer to repeat, then to rephrase, then to move on.
+  const IDLE_LINES = [
+    "Take a moment if you need it. Would you like me to repeat the question?",
+    "Are you still with me? I'm happy to rephrase it if that helps.",
+    "No problem — we can come back to this one. Just let me know when you're ready to continue.",
+  ];
 
   useEffect(() => {
     const poll = () =>
@@ -98,6 +109,25 @@ export default function App() {
     }
   };
 
+  // The candidate said nothing at all. Instead of listening to silence forever,
+  // the interviewer checks in (like a real one would), then keeps listening —
+  // with a little more patience each time so it nudges, never nags.
+  const handleIdle = async () => {
+    if (micMuted || stageRef.current !== "live") return;
+    // If they're mid-typing, don't interrupt — just keep the mic open.
+    if (inputRef.current.trim()) {
+      listenForReply();
+      return;
+    }
+    const line = IDLE_LINES[Math.min(idleNudges.current, IDLE_LINES.length - 1)];
+    idleNudges.current += 1;
+    setTurns((t) => [...t, { role: "interviewer", text: line }]);
+    voice.speak(line);
+    await voice.whenDoneSpeaking();
+    if (micMuted || stageRef.current !== "live") return;
+    listenForReply();
+  };
+
   // Auto-listen for the reply, but only AFTER the interviewer finishes speaking
   // — otherwise starting the mic barges-in and cuts the interviewer's audio off.
   const listenForReply = async () => {
@@ -105,12 +135,17 @@ export default function App() {
     await voice.whenDoneSpeaking();
     if (micMuted || stageRef.current !== "live") return; // don't listen after the call ends
     setInterim("");
+    // Grow the check-in interval after each nudge: ~15s first, then longer, so a
+    // thinking candidate isn't pestered but a truly absent one is still noticed.
+    const idleMs = 15000 + Math.min(idleNudges.current, 4) * 6000;
     voice.listen(
       (finalText) => {
         setInterim("");
         send(finalText);
       },
       (i) => setInterim(i),
+      handleIdle,
+      idleMs,
     );
   };
 
@@ -131,8 +166,20 @@ export default function App() {
     sessionId.current = null;
     startedAt.current = Date.now();
     setElapsed(0);
+    idleNudges.current = 0;
     await streamInto({ action: "startMock", params: { round, role, level } });
     listenForReply();
+  };
+
+  // Bail out of a still-connecting interview back to setup, without scoring an
+  // empty conversation. Safe because a failed/empty opening run has finished.
+  const cancelToSetup = () => {
+    voice.cancelSpeak();
+    voice.stopListen();
+    sessionId.current = null;
+    setBusy(false);
+    setTurns([]);
+    setStage("setup");
   };
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -140,6 +187,7 @@ export default function App() {
   const send = async (textArg?: string) => {
     const msg = (textArg ?? input).trim();
     if (!msg || busy) return;
+    idleNudges.current = 0; // they answered — reset our patience for the next turn
     setInput("");
     setTurns((t) => [...t, { role: "candidate", text: msg }]);
     await streamInto({ prompt: msg, sessionId: sessionId.current });
@@ -288,6 +336,8 @@ export default function App() {
       send={send}
       listenForReply={listenForReply}
       onEnd={endAndScore}
+      onRetry={start}
+      onCancel={cancelToSetup}
       micMuted={micMuted}
       setMicMuted={setMicMuted}
     />
