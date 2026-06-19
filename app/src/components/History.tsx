@@ -16,6 +16,7 @@ import {
   Legend,
 } from "recharts";
 import { fetchCollection, fetchRounds, type CollectionItem, type Round } from "../lib/api";
+import ResultDetail from "./ResultDetail";
 
 const DIMS = ["communication", "depth", "problem_solving", "confidence"] as const;
 const DIM_LABEL: Record<string, string> = {
@@ -145,51 +146,26 @@ export default function History({ rev }: { rev: number }) {
   // ---- Detail view ----
   if (open) {
     const secs = sections(open.body);
-    const improve = secs.find((s) => /improve/i.test(s.heading));
-    const summary = secs.find((s) => /summary/i.test(s.heading));
-    const evidence = secs.find((s) => /evidence/i.test(s.heading));
-    const transcript = secs.find((s) => /transcript/i.test(s.heading));
+    const sec = (re: RegExp) => secs.find((s) => re.test(s.heading))?.text;
     return (
-      <div className="max-w-3xl mx-auto p-8">
+      <div className="max-w-6xl mx-auto px-5 sm:px-6 py-8 sm:py-10 step-in">
         <button onClick={() => setOpenFile(null)} className="flex items-center gap-1.5 text-muted hover:text-soft text-sm mb-5">
           <ArrowLeft size={15} /> Back to history
         </button>
-
-        <div className="flex items-center gap-3 flex-wrap mb-1">
-          <h2 className="font-display text-3xl font-bold text-bright">{label(open.type)}</h2>
-          <span className="text-faint text-sm">{open.level} · {open.date}</span>
-          <span className={`ml-auto font-display text-4xl font-bold tnum ${SCORE_COLOR(open.avg)}`}>{open.avg}<span className="text-faint text-base font-normal">/4</span></span>
-        </div>
-        <p className="text-soft mb-5">{open.verdict}</p>
-
-        {/* rubric bars */}
-        <div className="rounded-xl card-base p-5 mb-5">
-          <div className="space-y-2.5">
-            {DIMS.map((d) => (
-              <div key={d} className="flex items-center gap-3 text-sm">
-                <span className="text-muted w-32 shrink-0">{DIM_LABEL[d]}</span>
-                <div className="flex-1 h-2 rounded-full bg-panel2 overflow-hidden">
-                  <div className="h-full bg-violet" style={{ width: `${((open.rubric[d] ?? 0) / 4) * 100}%` }} />
-                </div>
-                <span className="text-soft w-8 text-right">{open.rubric[d] ?? "—"}/4</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {improve && (
-          <Section title="What to improve" accent>
-            {improve.text}
-          </Section>
-        )}
-        {summary && <Section title="Summary">{summary.text}</Section>}
-        {evidence && <Section title="Evidence notes">{evidence.text}</Section>}
-        {transcript && (
-          <div className="mb-5">
-            <h3 className="text-faint text-xs uppercase tracking-wide mb-3">Transcript</h3>
-            <Transcript text={transcript.text} />
-          </div>
-        )}
+        <ResultDetail
+          data={{
+            verdict: open.verdict,
+            rubric: open.rubric,
+            avg: open.avg,
+            improve: sec(/improve/i),
+            summary: sec(/summary/i),
+            evidence: sec(/evidence/i),
+            transcript: sec(/transcript/i),
+          }}
+          roundLabel={label(open.type)}
+          level={open.level}
+          date={open.date}
+        />
       </div>
     );
   }
@@ -484,31 +460,3 @@ function Delta({ v }: { v: number }) {
   );
 }
 
-function Section({ title, children, accent }: { title: string; children: React.ReactNode; accent?: boolean }) {
-  return (
-    <div className={`rounded-xl border p-5 mb-5 ${accent ? "border-violet/40 bg-violet/5" : "border-edge bg-panel"}`}>
-      <h3 className={`text-xs uppercase tracking-wide mb-2 ${accent ? "text-violet2" : "text-faint"}`}>{title}</h3>
-      <div className="text-soft text-sm whitespace-pre-wrap leading-relaxed">{children}</div>
-    </div>
-  );
-}
-
-function Transcript({ text }: { text: string }) {
-  // Lines look like "**Interviewer:** ..." / "**You:** ...".
-  const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
-  return (
-    <div className="space-y-3">
-      {blocks.map((b, i) => {
-        const you = /^\*\*You:\*\*/.test(b);
-        const clean = b.replace(/^\*\*(Interviewer|You):\*\*\s*/, "");
-        return (
-          <div key={i} className={you ? "text-right" : ""}>
-            <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap text-left max-w-[88%] ${you ? "bg-violet text-white" : "card-base text-soft"}`}>
-              {clean}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
