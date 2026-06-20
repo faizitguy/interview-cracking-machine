@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **🚧 Active rebuild in progress.** ICM is being expanded into a personalised, single-user AI interview-prep platform. Before doing build work, read **[docs/ICM-PROGRESS.md](docs/ICM-PROGRESS.md)** (the step-by-step progress tracker — start here) and **[docs/ICM-PRODUCT-PRD.md](docs/ICM-PRODUCT-PRD.md)** (the full plan). We build one milestone at a time; a step is only marked Done after the user verifies it. The sections below describe the *current* (pre-rebuild) app.
+
 ## What this is
 
 **Interview Cracking Machine** — a local-first **interview-prep app** built around a three-level journey: **Learn → Practice → Mock Interview**. You upload your resume, pick an **interview round** (General/Behavioral, DSA, System Design, AI Engineering, Python, Backend, Frontend, Full-Stack — `server/src/prompts.ts` `ROUNDS`, served via `GET /api/rounds`), and Claude (the local `claude` CLI, behind the UI) drives all three modes, every one anchored in your resume's actual skills/projects.
