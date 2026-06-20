@@ -1,27 +1,28 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Plus, History as HistoryIcon } from "lucide-react";
+import { GraduationCap, Dumbbell, Mic } from "lucide-react";
 
-type View = "landing" | "interview" | "history";
+export type Mode = "learn" | "practice" | "mock";
 
 const ITEMS = [
-  { key: "interview", label: "New interview", Icon: Plus },
-  { key: "history", label: "History", Icon: HistoryIcon },
+  { key: "learn", label: "Learn", Icon: GraduationCap },
+  { key: "practice", label: "Practice", Icon: Dumbbell },
+  { key: "mock", label: "Mock", Icon: Mic },
 ] as const;
 
 /**
  * Premium top navigation — sticky glass bar with a brand lockup, a segmented
- * nav whose active "pill" slides between items on the aurora gradient, and a
- * live status chip reflecting the claude/resume health poll.
+ * switcher for the three modes (Learn → Practice → Mock) whose active "pill"
+ * slides on the aurora gradient, and a live claude/résumé status chip.
  */
 export default function TopNav({
-  view,
+  mode,
   onNavigate,
   onBrand,
   claudeOk,
   ready,
 }: {
-  view: View;
-  onNavigate: (v: "interview" | "history") => void;
+  mode: Mode;
+  onNavigate: (m: Mode) => void;
   onBrand: () => void;
   claudeOk: boolean;
   ready: boolean;
@@ -31,7 +32,7 @@ export default function TopNav({
   const [ind, setInd] = useState({ left: 0, width: 0, visible: false });
 
   const measure = useCallback(() => {
-    const el = btnRefs.current[view];
+    const el = btnRefs.current[mode];
     const wrap = wrapRef.current;
     if (!el || !wrap) {
       setInd((s) => ({ ...s, visible: false }));
@@ -40,7 +41,7 @@ export default function TopNav({
     const w = wrap.getBoundingClientRect();
     const b = el.getBoundingClientRect();
     setInd({ left: b.left - w.left, width: b.width, visible: true });
-  }, [view]);
+  }, [mode]);
 
   useLayoutEffect(measure, [measure]);
   useEffect(() => {
@@ -55,28 +56,28 @@ export default function TopNav({
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
         style={{ background: "linear-gradient(90deg, transparent, rgba(255,93,143,.35) 30%, rgba(139,124,255,.35) 70%, transparent)" }}
       />
-      <div className="mx-auto max-w-6xl px-5 h-[60px] flex items-center gap-4">
+      <div className="mx-auto flex h-[60px] max-w-6xl items-center gap-4 px-5">
         {/* Brand */}
-        <button onClick={onBrand} className="group flex items-center gap-2.5 shrink-0">
+        <button onClick={onBrand} className="group flex shrink-0 items-center gap-2.5">
           <span className="orb h-7 w-7"><span className="orb-ring" /></span>
-          <span className="leading-none text-left">
-            <span className="block font-display text-bright font-semibold text-sm tracking-tight group-hover:text-aurora transition-colors">
+          <span className="text-left leading-none">
+            <span className="block font-display text-sm font-semibold tracking-tight text-bright transition-colors group-hover:text-aurora">
               Interview Cracking Machine
             </span>
-            <span className="block text-[10px] uppercase tracking-[0.22em] text-faint mt-1">
-              Mock interview studio
+            <span className="mt-1 block text-[10px] uppercase tracking-[0.22em] text-faint">
+              Learn · Practice · Mock
             </span>
           </span>
         </button>
 
         <div className="ml-auto flex items-center gap-3">
           {/* Status chip */}
-          <span className="hidden sm:flex items-center gap-1.5 rounded-full border border-edge/70 bg-panel/50 px-2.5 py-1 text-[11px] font-medium text-muted">
+          <span className="hidden items-center gap-1.5 rounded-full border border-edge/70 bg-panel/50 px-2.5 py-1 text-[11px] font-medium text-muted sm:flex">
             <span
               className={`h-1.5 w-1.5 rounded-full ${claudeOk ? "bg-teal" : "bg-bad"}`}
               style={{ boxShadow: claudeOk ? "0 0 8px rgba(70,224,168,.75)" : "0 0 8px rgba(255,107,107,.75)" }}
             />
-            {claudeOk ? (ready ? "Ready" : "Resume needed") : "AI offline"}
+            {claudeOk ? (ready ? "Ready" : "Résumé optional") : "AI offline"}
           </span>
 
           {/* Segmented nav with sliding aurora indicator */}
@@ -87,7 +88,7 @@ export default function TopNav({
             {ind.visible && (
               <span
                 aria-hidden
-                className="absolute top-1 bottom-1 rounded-full border border-coral/25"
+                className="absolute bottom-1 top-1 rounded-full border border-coral/25"
                 style={{
                   left: ind.left,
                   width: ind.width,
@@ -99,7 +100,7 @@ export default function TopNav({
               />
             )}
             {ITEMS.map(({ key, label, Icon }) => {
-              const active = view === key;
+              const active = mode === key;
               return (
                 <button
                   key={key}

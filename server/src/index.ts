@@ -10,7 +10,15 @@ import multer from "multer";
 
 import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
 import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
-import { mockInterviewer, mockScore, ROUNDS } from "./prompts.js";
+import {
+  mockInterviewer,
+  mockScore,
+  learnTrack,
+  learnLesson,
+  practiceQuestion,
+  practiceFeedback,
+  ROUNDS,
+} from "./prompts.js";
 import { parseResume } from "./resume.js";
 import { synth, loadTTS, ttsReady, VOICES, DEFAULT_VOICE } from "./tts.js";
 
@@ -26,6 +34,26 @@ const ACTIONS: Record<string, Action> = {
       today(),
       // sanitize the client-provided filename to a bare mocks/*.md name
       String(p.file ?? `${today()}-mock.md`).replace(/[^a-zA-Z0-9._-]/g, "") || `${today()}-mock.md`,
+    ),
+  // Learn module — curriculum tracks (stateless, no file writes).
+  learnTrack: (p) => learnTrack(String(p.round ?? "general"), String(p.role ?? ""), String(p.level ?? "mid")),
+  learnLesson: (p) =>
+    learnLesson(String(p.round ?? "general"), String(p.topic ?? ""), String(p.role ?? ""), String(p.level ?? "mid")),
+  // Practice module — single-question drills (stateless, no file writes).
+  practiceQuestion: (p) =>
+    practiceQuestion(
+      String(p.round ?? "general"),
+      String(p.role ?? ""),
+      String(p.level ?? "mid"),
+      Array.isArray(p.asked) ? (p.asked as unknown[]).map(String) : [],
+    ),
+  practiceFeedback: (p) =>
+    practiceFeedback(
+      String(p.round ?? "general"),
+      String(p.question ?? ""),
+      String(p.answer ?? ""),
+      String(p.role ?? ""),
+      String(p.level ?? "mid"),
     ),
 };
 

@@ -1,148 +1,193 @@
 import { useEffect, useState } from "react";
-import { Mic, FileText, Sparkles, LineChart, Lock, Volume2, ArrowRight, Play } from "lucide-react";
+import {
+  Mic, LineChart, Lock, Volume2, ArrowRight, GraduationCap, Dumbbell, Check, Sparkles,
+} from "lucide-react";
 import { useReveal } from "../lib/useReveal";
+import type { Mode } from "./TopNav";
 
 const ROUND_CHIPS = ["DSA", "System Design", "AI Engineering", "Python", "Backend", "Frontend", "Full-Stack", "Behavioral"];
 
-export default function Landing({ onStart }: { onStart: () => void }) {
+/** The three levels of the journey — the heart of the landing page. */
+const PATHS: {
+  mode: Mode;
+  n: string;
+  title: string;
+  tag: string;
+  body: string;
+  bullets: string[];
+  icon: React.ReactNode;
+  accent: string; // text color class
+  bg: string; // icon bg
+  glow: string;
+  cta: string;
+}[] = [
+  {
+    mode: "learn",
+    n: "01",
+    title: "Learn",
+    tag: "Build the foundation",
+    body: "Structured study tracks per round, ordered foundational → advanced and aimed at the gaps in your résumé.",
+    bullets: ["6–8 lessons per track", "Anchored to your gaps", "Progress that's remembered"],
+    icon: <GraduationCap size={22} />,
+    accent: "text-amber",
+    bg: "rgba(255,177,61,.12)",
+    glow: "glow-amber",
+    cta: "Start learning",
+  },
+  {
+    mode: "practice",
+    n: "02",
+    title: "Practice",
+    tag: "Drill the reps",
+    body: "One question at a time. Answer it, get honest instant feedback, and move on. Fast, low-stakes reps.",
+    bullets: ["Single-question drills", "Instant coaching", "No clock, no pressure"],
+    icon: <Dumbbell size={22} />,
+    accent: "text-coral",
+    bg: "rgba(255,93,143,.12)",
+    glow: "glow-coral",
+    cta: "Start drilling",
+  },
+  {
+    mode: "mock",
+    n: "03",
+    title: "Mock Interview",
+    tag: "Prove it live",
+    body: "A realistic spoken interview anchored to your real projects — then an honest 1–4 score and exactly what to fix.",
+    bullets: ["Voice-first, conversational", "Honest scored rubric", "Tracked over time"],
+    icon: <Mic size={22} />,
+    accent: "text-violet2",
+    bg: "rgba(139,124,255,.12)",
+    glow: "glow-iris",
+    cta: "Start interview",
+  },
+];
+
+export default function Landing({ onPick }: { onPick: (m: Mode) => void }) {
   useReveal([]);
   return (
     <div className="relative min-h-full overflow-x-hidden">
       {/* top bar */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-ink/60 border-b border-edge/60">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center gap-3">
+      <header className="sticky top-0 z-30 border-b border-edge/60 bg-ink/60 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-6xl items-center gap-3 px-6">
           <Logo />
           <span className="font-display font-semibold text-bright">Interview Cracking Machine</span>
           <nav className="ml-auto flex items-center gap-2">
-            <a href="#how" className="hidden sm:block text-sm text-muted hover:text-soft px-3 py-2">How it works</a>
-            <button onClick={onStart} className="btn-primary rounded-xl px-4 py-2 text-sm">Start practicing</button>
+            <a href="#path" className="hidden px-3 py-2 text-sm text-muted hover:text-soft sm:block">How it works</a>
+            <button onClick={() => onPick("mock")} className="btn-primary rounded-xl px-4 py-2 text-sm">Start now</button>
           </nav>
         </div>
       </header>
 
       {/* hero */}
-      <section className="relative max-w-6xl mx-auto px-6 pt-20 pb-16 grid lg:grid-cols-[1.05fr_0.95fr] gap-12 items-center">
-        <div className="grid-dots absolute inset-0 -z-10 opacity-40 [mask-image:radial-gradient(60%_60%_at_30%_30%,#000,transparent)]" />
-        <div>
-          <span className="inline-flex items-center gap-2 rounded-full border border-edge2 bg-panel/60 px-3 py-1 text-xs text-soft reveal">
-            <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse" /> Your always-on AI interviewer
-          </span>
-          <h1 className="reveal font-display text-5xl sm:text-6xl font-bold leading-[1.04] mt-5 text-bright">
-            Crack your next
-            <br />
-            interview, <span className="text-aurora">out loud.</span>
-          </h1>
-          <p className="reveal text-muted text-lg leading-relaxed mt-5 max-w-xl">
-            Upload your resume, pick a round, and talk through a realistic spoken interview. A sharp AI
-            interviewer digs into your actual projects, then scores you honestly and shows you exactly what to fix.
-          </p>
-          <div className="reveal flex flex-wrap items-center gap-3 mt-8">
-            <button onClick={onStart} className="btn-primary rounded-xl px-6 py-3.5 text-base inline-flex items-center gap-2">
-              <Play size={17} /> Start practicing
-            </button>
-            <a href="#how" className="rounded-xl border border-edge2 bg-panel/60 px-5 py-3.5 text-sm text-soft hover:border-violet transition-colors inline-flex items-center gap-2">
-              See how it works <ArrowRight size={15} />
-            </a>
-          </div>
-          <div className="reveal flex flex-wrap gap-1.5 mt-8">
-            {ROUND_CHIPS.map((c) => (
-              <span key={c} className="rounded-full border border-edge bg-panel/50 px-3 py-1 text-xs text-muted">{c}</span>
-            ))}
-          </div>
+      <section className="relative mx-auto max-w-6xl px-6 pb-12 pt-20 text-center">
+        <div className="grid-dots absolute inset-0 -z-10 opacity-40 [mask-image:radial-gradient(60%_50%_at_50%_20%,#000,transparent)]" />
+        <span className="reveal inline-flex items-center gap-2 rounded-full border border-edge2 bg-panel/60 px-3 py-1 text-xs text-soft">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal" /> Your always-on AI interview coach
+        </span>
+        <h1 className="reveal mx-auto mt-5 max-w-3xl font-display text-5xl font-bold leading-[1.04] text-bright sm:text-6xl">
+          Learn it. Practice it. <span className="text-aurora">Crack it.</span>
+        </h1>
+        <p className="reveal mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-muted">
+          A complete path from "I don't know this" to "I nailed the interview." Study the fundamentals, drill real
+          questions, then face a realistic spoken mock that scores you honestly — all anchored to your résumé.
+        </p>
+        <div className="reveal mt-7 flex flex-wrap justify-center gap-1.5">
+          {ROUND_CHIPS.map((c) => (
+            <span key={c} className="rounded-full border border-edge bg-panel/50 px-3 py-1 text-xs text-muted">{c}</span>
+          ))}
         </div>
+      </section>
 
-        {/* live-interview glass card */}
-        <div className="reveal relative">
-          <div className="absolute -inset-6 -z-10 blur-3xl opacity-60 rounded-full"
-               style={{ background: "radial-gradient(closest-side, rgba(255,93,143,.35), transparent)" }} />
-          <div className="hairline rounded-3xl p-6 glow-coral">
-            <div className="flex items-center gap-3">
-              <div className="orb speaking h-12 w-12">
-                <span className="orb-ring" />
+      {/* the three-level path — the centerpiece */}
+      <section id="path" className="mx-auto max-w-6xl px-6 pb-8 pt-6">
+        <p className="reveal mb-2 text-center font-mono text-xs uppercase tracking-[0.22em] text-amber">Choose your level</p>
+        <h2 className="reveal text-center font-display text-3xl font-bold text-bright">Three steps to interview-ready</h2>
+        <p className="reveal mx-auto mt-3 max-w-xl text-center text-muted">
+          Start anywhere — but the path runs left to right. Pick where you are today.
+        </p>
+
+        <div className="relative mt-12 grid gap-5 md:grid-cols-3">
+          {/* connecting journey line */}
+          <div
+            className="pointer-events-none absolute left-[16%] right-[16%] top-9 hidden h-px md:block"
+            style={{ background: "linear-gradient(90deg, var(--color-amber), var(--color-coral) 50%, var(--color-violet2))" }}
+          />
+          {PATHS.map((p) => (
+            <button
+              key={p.mode}
+              onClick={() => onPick(p.mode)}
+              className={`reveal spotlight card-base group relative z-10 flex flex-col p-6 text-left transition-all duration-300 hover:-translate-y-1.5 ${p.glow}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl" style={{ background: p.bg }}>
+                  <span className={p.accent}>{p.icon}</span>
+                </span>
+                <span className="font-mono text-2xl font-bold text-edge2 transition-colors group-hover:text-faint">{p.n}</span>
               </div>
-              <div>
-                <div className="text-bright font-medium text-sm">Priya · AI Interviewer</div>
-                <div className="text-faint text-xs flex items-center gap-1.5"><Volume2 size={12} className="text-coral" /> speaking…</div>
-              </div>
-              <span className="ml-auto font-mono text-sm text-violet2 tnum">07:42</span>
-            </div>
-            <div className="mt-5 space-y-3">
-              <Bubble who="ai">On the Vericast project you built a real-time agent — what broke first under load, and how did you fix it?</Bubble>
-              <Bubble who="me">We were re-rendering the whole tree on every event, so I batched updates and memoized…</Bubble>
-              <Bubble who="ai">Good. Now what's the time complexity of that batching step?</Bubble>
-            </div>
-            <div className="mt-5 flex items-center gap-2 rounded-xl border border-edge bg-panel2/70 px-3 py-2.5">
-              <Mic size={15} className="text-teal animate-pulse" />
-              <span className="text-faint text-sm">Listening…</span>
-              <span className="ml-auto h-6 w-px bg-edge2" />
-              <span className="text-faint text-xs">speak naturally</span>
-            </div>
-          </div>
+              <div className={`mt-5 text-[11px] uppercase tracking-wide ${p.accent}`}>{p.tag}</div>
+              <h3 className="mt-1 font-display text-2xl font-bold text-bright">{p.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted">{p.body}</p>
+              <ul className="mt-5 space-y-2">
+                {p.bullets.map((b) => (
+                  <li key={b} className="flex items-center gap-2 text-sm text-soft">
+                    <Check size={14} className={p.accent} /> {b}
+                  </li>
+                ))}
+              </ul>
+              <span className={`mt-6 inline-flex items-center gap-1.5 text-sm font-medium ${p.accent}`}>
+                {p.cta}
+                <ArrowRight size={15} className="transition-transform group-hover:translate-x-1" />
+              </span>
+            </button>
+          ))}
         </div>
       </section>
 
       {/* stat strip */}
-      <section className="max-w-6xl mx-auto px-6 py-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <section className="mx-auto grid max-w-6xl grid-cols-2 gap-4 px-6 py-12 sm:grid-cols-4">
         {[
           { n: "8", l: "interview rounds" },
-          { n: "100%", l: "from your resume" },
+          { n: "100%", l: "from your résumé" },
           { n: "1–4", l: "honest scoring" },
           { n: "$0", l: "free & local" },
         ].map((s) => (
           <div key={s.l} className="reveal text-center">
             <CountUp value={s.n} className="font-display text-4xl font-bold text-aurora tnum" />
-            <div className="text-muted text-sm mt-1">{s.l}</div>
+            <div className="mt-1 text-sm text-muted">{s.l}</div>
           </div>
         ))}
       </section>
 
-      {/* how it works */}
-      <section id="how" className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="reveal font-display text-3xl sm:text-4xl font-bold text-bright text-center">Three steps to interview-ready</h2>
-        <p className="reveal text-muted text-center mt-3 max-w-xl mx-auto">No setup, no scheduling. Just you, your resume, and an interviewer that never gets tired of helping you improve.</p>
-        <div className="grid md:grid-cols-3 gap-5 mt-12">
-          {[
-            { i: <FileText size={20} />, t: "Upload your resume", d: "Drop a PDF or DOCX. The interviewer reads your real skills and projects so every question is about you." },
-            { i: <Mic size={20} />, t: "Pick a round & talk", d: "Choose DSA, system design, AI engineering, behavioral and more. It speaks, you answer out loud — like the real thing." },
-            { i: <LineChart size={20} />, t: "Get honest feedback", d: "An unflinching 1–4 score, exactly what to improve, the full transcript, and a progress chart across every attempt." },
-          ].map((s, i) => (
-            <div key={s.t} className="reveal spotlight card-base p-6">
-              <div className="flex items-center gap-3">
-                <span className="grid place-items-center h-10 w-10 rounded-xl text-amber" style={{ background: "rgba(255,177,61,.1)" }}>{s.i}</span>
-                <span className="font-mono text-xs text-faint">0{i + 1}</span>
-              </div>
-              <h3 className="font-display text-lg font-semibold text-bright mt-4">{s.t}</h3>
-              <p className="text-muted text-sm mt-2 leading-relaxed">{s.d}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* bento features */}
-      <section className="max-w-6xl mx-auto px-6 pb-20">
-        <div className="grid md:grid-cols-3 gap-5">
-          <Feature className="md:col-span-2 glow-iris" icon={<Volume2 />} title="Voice-first, genuinely conversational"
-            body="A natural neural voice asks one question at a time and listens to your spoken answer. It interrupts, follows up, and adapts difficulty — the closest thing to a real room." />
-          <Feature icon={<Sparkles />} title="Anchored to your resume"
-            body="It quotes your real projects by name and probes the gaps. Generic question banks can't do that." />
+      {/* why it works */}
+      <section className="mx-auto max-w-6xl px-6 pb-20">
+        <div className="grid gap-5 md:grid-cols-3">
+          <Feature className="glow-iris md:col-span-2" icon={<Volume2 />} title="Voice-first, genuinely conversational"
+            body="In the mock, a natural neural voice asks one question at a time and listens to your spoken answer. It follows up and adapts difficulty — the closest thing to a real room." />
+          <Feature icon={<Sparkles />} title="Anchored to your résumé"
+            body="Lessons, drills, and the mock all quote your real projects and probe your real gaps. Generic question banks can't do that." />
           <Feature icon={<LineChart />} title="Track your climb"
-            body="Every interview is saved with feedback and transcript. Watch your score line rise as you practice." />
+            body="Lesson progress is saved, and every mock is stored with feedback. Watch your score line rise as you practice." />
           <Feature className="md:col-span-2" icon={<Lock />} title="Private, local, and free"
-            body="Runs on your machine with your own AI — no API keys, no uploads to a server, no cost. Your resume never leaves your laptop." />
+            body="Runs on your machine with your own AI — no API keys, no uploads to a server, no cost. Your résumé never leaves your laptop." />
         </div>
       </section>
 
       {/* final CTA */}
-      <section className="max-w-6xl mx-auto px-6 pb-24">
-        <div className="reveal hairline rounded-3xl px-8 py-14 text-center relative overflow-hidden">
+      <section className="mx-auto max-w-6xl px-6 pb-24">
+        <div className="reveal hairline relative overflow-hidden rounded-3xl px-8 py-14 text-center">
           <div className="absolute inset-0 -z-10 opacity-70" style={{ background: "radial-gradient(40rem 20rem at 50% -20%, rgba(139,124,255,.2), transparent)" }} />
           <h2 className="font-display text-4xl font-bold text-bright">Your next interview won't be a surprise.</h2>
-          <p className="text-muted mt-3 max-w-lg mx-auto">Practice the hard questions today, on your own terms, until they feel easy.</p>
-          <button onClick={onStart} className="btn-primary rounded-xl px-7 py-4 text-base mt-7 inline-flex items-center gap-2">
-            <Play size={18} /> Start practicing
-          </button>
+          <p className="mx-auto mt-3 max-w-lg text-muted">Learn the gaps, drill the reps, and walk in ready. Start wherever you are.</p>
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <button onClick={() => onPick("learn")} className="rounded-xl border border-edge2 bg-panel/60 px-5 py-3.5 text-sm text-soft transition-colors hover:border-amber inline-flex items-center gap-2">
+              <GraduationCap size={17} /> Learn first
+            </button>
+            <button onClick={() => onPick("mock")} className="btn-primary inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-base">
+              <Mic size={18} /> Jump to a mock
+            </button>
+          </div>
         </div>
-        <p className="text-center text-faint text-xs mt-10">Interview Cracking Machine · runs locally with your own AI</p>
+        <p className="mt-10 text-center text-xs text-faint">Interview Cracking Machine · runs locally with your own AI</p>
       </section>
     </div>
   );
@@ -156,23 +201,12 @@ function Logo() {
   );
 }
 
-function Bubble({ who, children }: { who: "ai" | "me"; children: React.ReactNode }) {
-  const me = who === "me";
-  return (
-    <div className={me ? "text-right" : ""}>
-      <div className={`inline-block rounded-2xl px-3.5 py-2 text-sm text-left max-w-[85%] ${me ? "bg-violet text-white" : "bg-panel2 border border-edge text-soft"}`}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function Feature({ icon, title, body, className = "" }: { icon: React.ReactNode; title: string; body: string; className?: string }) {
   return (
     <div className={`reveal spotlight card-base p-7 ${className}`}>
-      <span className="grid place-items-center h-11 w-11 rounded-xl text-coral" style={{ background: "rgba(255,93,143,.1)" }}>{icon}</span>
-      <h3 className="font-display text-xl font-semibold text-bright mt-5">{title}</h3>
-      <p className="text-muted text-sm mt-2 leading-relaxed max-w-md">{body}</p>
+      <span className="grid h-11 w-11 place-items-center rounded-xl text-coral" style={{ background: "rgba(255,93,143,.1)" }}>{icon}</span>
+      <h3 className="mt-5 font-display text-xl font-semibold text-bright">{title}</h3>
+      <p className="mt-2 max-w-md text-sm leading-relaxed text-muted">{body}</p>
     </div>
   );
 }
@@ -195,6 +229,7 @@ function CountUp({ value, className }: { value: string; className?: string }) {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   if (!m) return <div className={className}>{value}</div>;
   return <div className={className}>{m[1]}{shown}{m[3]}</div>;

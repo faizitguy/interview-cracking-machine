@@ -1,59 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import { Trophy, History as HistoryIcon } from "lucide-react";
-import { askStream, eventText, fetchRounds, checkHealth, appendFile, today, type ClaudeEvent, type Round } from "./lib/api";
-import { useVoice } from "./lib/useVoice";
-import SetupBanner from "./components/SetupBanner";
-import SetupWizard from "./components/SetupWizard";
-import History from "./components/History";
+import { useEffect, useState } from "react";
+import { fetchRounds, checkHealth, type Round } from "./lib/api";
 import Landing from "./components/Landing";
-import LiveCall from "./components/LiveCall";
-import TopNav from "./components/TopNav";
+import TopNav, { type Mode } from "./components/TopNav";
+import MockModule from "./modules/mock/MockModule";
+import LearnModule from "./modules/learn/LearnModule";
+import PracticeModule from "./modules/practice/PracticeModule";
 
-interface Turn {
-  role: "interviewer" | "candidate";
-  text: string;
-}
-type Stage = "setup" | "live" | "scored";
-
+/**
+ * App shell — picks between the landing page and one of the three modules
+ * (Learn → Practice → Mock). Shared concerns (health poll, rounds, the top
+ * nav) live here; each module owns its own state and flow.
+ */
 export default function App() {
-  const [stage, setStage] = useState<Stage>("setup");
-  const [role, setRole] = useState("");
-  const [level, setLevel] = useState("mid");
-  const [round, setRound] = useState("general");
+  const [mode, setMode] = useState<Mode | null>(null); // null = landing
   const [rounds, setRounds] = useState<Round[]>([]);
-  const [view, setView] = useState<"landing" | "interview" | "history">("landing");
-  const [historyRev, setHistoryRev] = useState(0);
-  const [micMuted, setMicMuted] = useState(false);
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [interim, setInterim] = useState("");
   const [claudeOk, setClaudeOk] = useState(true);
   const [claudeErr, setClaudeErr] = useState<string>();
   const [resumeName, setResumeName] = useState<string>();
   const [hasResume, setHasResume] = useState(false);
-  const [scoring, setScoring] = useState(false);
-  const [result, setResult] = useState("");
-
-  const voice = useVoice();
-  const sessionId = useRef<string | null>(null);
-  const startedAt = useRef(0);
-  const busyRef = useRef(false);
-  busyRef.current = busy;
-  const stageRef = useRef(stage);
-  stageRef.current = stage;
-  const idleNudges = useRef(0); // how many times we've checked in on a silent candidate
-  const inputRef = useRef("");
-  inputRef.current = input;
-
-  // What the interviewer says when the candidate goes quiet — escalating, like a
-  // real interviewer: first offer to repeat, then to rephrase, then to move on.
-  const IDLE_LINES = [
-    "Take a moment if you need it. Would you like me to repeat the question?",
-    "Are you still with me? I'm happy to rephrase it if that helps.",
-    "No problem — we can come back to this one. Just let me know when you're ready to continue.",
-  ];
 
   useEffect(() => {
     const poll = () =>
@@ -61,7 +25,7 @@ export default function App() {
         setClaudeOk(h.ok);
         setClaudeErr(h.error);
         setHasResume(h.hasResume);
-        if (h.resumeName) setResumeName((cur) => cur ?? h.resumeName); // show the stored resume
+        if (h.resumeName) setResumeName((cur) => cur ?? h.resumeName); // show the stored résumé
       });
     poll();
     const t = setInterval(poll, 15000);
@@ -74,272 +38,35 @@ export default function App() {
     });
   }, []);
 
-  useEffect(() => {
-    if (stage !== "live") return;
-    const t = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt.current) / 1000)), 500);
-    return () => clearInterval(t);
-  }, [stage]);
-
-  const streamInto = async (req: Parameters<typeof askStream>[0], opts?: { speak?: boolean }) => {
-    setBusy(true);
-    setTurns((t) => [...t, { role: "interviewer", text: "" }]);
-    try {
-      await askStream(req, (ev: ClaudeEvent) => {
-        if (ev.type === "system" && (ev as any).session_id) sessionId.current = (ev as any).session_id;
-        if (ev.type === "assistant") {
-          const text = eventText(ev);
-          if (text) {
-            setTurns((t) => {
-              const n = [...t];
-              n[n.length - 1] = { role: "interviewer", text: (n[n.length - 1].text + " " + text).trim() };
-              return n;
-            });
-            if (opts?.speak !== false) voice.speak(text);
-          }
-        }
-      });
-    } catch (e) {
-      setTurns((t) => {
-        const n = [...t];
-        n[n.length - 1] = { role: "interviewer", text: `✗ ${(e as Error).message}` };
-        return n;
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // The candidate said nothing at all. Instead of listening to silence forever,
-  // the interviewer checks in (like a real one would), then keeps listening —
-  // with a little more patience each time so it nudges, never nags.
-  const handleIdle = async () => {
-    if (micMuted || stageRef.current !== "live") return;
-    // If they're mid-typing, don't interrupt — just keep the mic open.
-    if (inputRef.current.trim()) {
-      listenForReply();
-      return;
-    }
-    const line = IDLE_LINES[Math.min(idleNudges.current, IDLE_LINES.length - 1)];
-    idleNudges.current += 1;
-    setTurns((t) => [...t, { role: "interviewer", text: line }]);
-    voice.speak(line);
-    await voice.whenDoneSpeaking();
-    if (micMuted || stageRef.current !== "live") return;
-    listenForReply();
-  };
-
-  // Auto-listen for the reply, but only AFTER the interviewer finishes speaking
-  // — otherwise starting the mic barges-in and cuts the interviewer's audio off.
-  const listenForReply = async () => {
-    if (!voice.sttSupported || micMuted) return;
-    await voice.whenDoneSpeaking();
-    if (micMuted || stageRef.current !== "live") return; // don't listen after the call ends
-    setInterim("");
-    // Grow the check-in interval after each nudge: ~15s first, then longer, so a
-    // thinking candidate isn't pestered but a truly absent one is still noticed.
-    const idleMs = 15000 + Math.min(idleNudges.current, 4) * 6000;
-    voice.listen(
-      (finalText) => {
-        setInterim("");
-        send(finalText);
-      },
-      (i) => setInterim(i),
-      handleIdle,
-      idleMs,
-    );
-  };
-
-  // Preview the selected voice on the setup screen (explicit click = gesture).
-  const testVoice = () => {
-    voice.unlock();
-    voice.cancelSpeak();
-    voice.speak("Hi, I'm your interviewer today. When you're ready, tell me a little about yourself.");
-  };
-
-  const start = async () => {
-    voice.unlock(); // must run inside the click gesture so audio can play
-    setMicMuted(false);
-    setResult("");
-    setScoring(false);
-    setStage("live");
-    setTurns([]);
-    sessionId.current = null;
-    startedAt.current = Date.now();
-    setElapsed(0);
-    idleNudges.current = 0;
-    await streamInto({ action: "startMock", params: { round, role, level } });
-    listenForReply();
-  };
-
-  // Bail out of a still-connecting interview back to setup, without scoring an
-  // empty conversation. Safe because a failed/empty opening run has finished.
-  const cancelToSetup = () => {
-    voice.cancelSpeak();
-    voice.stopListen();
-    sessionId.current = null;
-    setBusy(false);
-    setTurns([]);
-    setStage("setup");
-  };
-
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  const send = async (textArg?: string) => {
-    const msg = (textArg ?? input).trim();
-    if (!msg || busy) return;
-    idleNudges.current = 0; // they answered — reset our patience for the next turn
-    setInput("");
-    setTurns((t) => [...t, { role: "candidate", text: msg }]);
-    await streamInto({ prompt: msg, sessionId: sessionId.current });
-    listenForReply();
-  };
-
-  // End the interview NOW: stop the voice/mic, leave the call immediately, then
-  // score in the background. Never blocked by an in-flight turn.
-  const endAndScore = async () => {
-    voice.cancelSpeak();
-    voice.stopListen();
-    const convo = turns.filter((t) => t.text.trim());
-    const sid = sessionId.current;
-
-    // Close the call instantly.
-    setStage("scored");
-
-    if (!sid) {
-      // Ended before the interview even started — nothing to grade.
-      setScoring(false);
-      setResult("");
-      return;
-    }
-
-    setScoring(true);
-    setResult("");
-    const file = `${today()}-${round}-${Math.random().toString(36).slice(2, 6)}.md`;
-    try {
-      // The backend runs one AI action at a time; wait for any in-flight turn.
-      for (let i = 0; i < 80 && busyRef.current; i++) await sleep(250);
-      const { result: scored } = await askStream(
-        { action: "scoreMock", params: { round, role, level, file }, sessionId: sid },
-        () => {},
-      );
-      setResult(scored ?? "Interview ended.");
-      const transcript = convo
-        .map((t) => `**${t.role === "interviewer" ? "Interviewer" : "You"}:** ${t.text}`)
-        .join("\n\n");
-      if (transcript) await appendFile(`mocks/${file}`, `\n\n## Transcript\n\n${transcript}\n`);
-      setHistoryRev((r) => r + 1);
-    } catch (e) {
-      setResult(`Couldn't score this one (${(e as Error).message}). Your transcript is safe — try another.`);
-    } finally {
-      setScoring(false);
-    }
-  };
-
-
-  if (view === "landing") return <Landing onStart={() => setView("interview")} />;
+  if (mode === null) return <Landing onPick={setMode} />;
 
   const nav = (
     <TopNav
-      view={view}
+      mode={mode}
       claudeOk={claudeOk}
       ready={hasResume || !!resumeName}
-      onBrand={() => setView("landing")}
-      onNavigate={(v) => {
-        setView(v);
-        if (v === "history") setHistoryRev((r) => r + 1);
-      }}
+      onBrand={() => setMode(null)}
+      onNavigate={setMode}
     />
   );
 
-  if (view === "history") {
-    return (
-      <div className="h-full flex flex-col bg-ink text-soft">
-        {nav}
-        <div className="flex-1 overflow-y-auto">
-          <History rev={historyRev} />
-        </div>
-      </div>
-    );
+  if (mode === "learn") {
+    return <LearnModule nav={nav} rounds={rounds} hasResume={hasResume} resumeName={resumeName} />;
   }
 
-  // ---- Setup / Scored ----
-  if (stage === "setup" || stage === "scored") {
-    const canStart = (hasResume || !!resumeName) && claudeOk;
-    return (
-      <div className="h-full flex flex-col bg-ink text-soft">
-        {nav}
-        <div className="flex-1 overflow-y-auto">
-        {!claudeOk && <SetupBanner error={claudeErr} />}
-        {stage === "scored" && (scoring || result) && (
-          <div className="max-w-2xl mx-auto px-6 pt-10">
-            <div className="hairline rounded-2xl p-6 glow-coral relative overflow-hidden">
-              <div className="flex items-center gap-3 mb-3">
-                <span className={`orb h-9 w-9 ${scoring ? "speaking" : ""}`}><span className="orb-ring" /></span>
-                <span className="font-display font-semibold text-bright">
-                  {scoring ? "Scoring your interview…" : "Your result is in"}
-                </span>
-                <Trophy size={16} className="ml-auto text-amber" />
-              </div>
-              {scoring ? (
-                <p className="shimmer text-sm">Reviewing your answers and writing honest feedback…</p>
-              ) : (
-                <p className="text-soft text-sm whitespace-pre-wrap leading-relaxed">{result}</p>
-              )}
-              <button
-                disabled={scoring}
-                onClick={() => {
-                  setView("history");
-                  setHistoryRev((r) => r + 1);
-                }}
-                className="mt-4 text-sm text-violet2 hover:text-bright inline-flex items-center gap-1.5 disabled:opacity-40"
-              >
-                See full feedback &amp; transcript in History <HistoryIcon size={14} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        <SetupWizard
-          scored={stage === "scored"}
-          resumeName={resumeName}
-          hasResume={hasResume}
-          onResumeUploaded={setResumeName}
-          round={round}
-          setRound={setRound}
-          rounds={rounds}
-          level={level}
-          setLevel={setLevel}
-          role={role}
-          setRole={setRole}
-          voice={voice}
-          onTestVoice={testVoice}
-          canStart={canStart}
-          onStart={start}
-        />
-        </div>
-      </div>
-    );
+  if (mode === "practice") {
+    return <PracticeModule nav={nav} rounds={rounds} />;
   }
 
-  // ---- Live interview (video-call layout) ----
   return (
-    <LiveCall
-      roundLabel={rounds.find((r) => r.id === round)?.label ?? "Interview"}
-      level={level}
-      elapsed={elapsed}
-      turns={turns}
-      busy={busy}
-      voice={voice}
-      interim={interim}
-      input={input}
-      setInput={setInput}
-      send={send}
-      listenForReply={listenForReply}
-      onEnd={endAndScore}
-      onRetry={start}
-      onCancel={cancelToSetup}
-      micMuted={micMuted}
-      setMicMuted={setMicMuted}
+    <MockModule
+      nav={nav}
+      rounds={rounds}
+      claudeOk={claudeOk}
+      claudeErr={claudeErr}
+      hasResume={hasResume}
+      resumeName={resumeName}
+      setResumeName={setResumeName}
     />
   );
 }
