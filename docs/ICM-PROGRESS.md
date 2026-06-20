@@ -57,36 +57,41 @@ We build **one step at a time**, and a step is only ✅ Done after the **user ve
 | M0.2 | First-run setup / auth | ⏭️ Decided — no login for now (local single-user); revisit only if cloud sync needs it | 2026-06-20 |
 | **M0.3** | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | ✅ Done | 2026-06-20 (`/ask` round-trip) |
 | **M0.4** | Persistence bridge: server writes app data → Supabase + materializes scratch files | ✅ Done | 2026-06-20 (profile round-trip) |
-| **M0.5** | Onboarding intake UI → `profiles` (first-run gate + edit) | 🟡 awaiting your verification | — |
-| M0.6 | Resume upload → Supabase + scratch `resume.md`; health check extended | 🔲 | — |
+| **M0.5** | Onboarding intake UI → `profiles` (first-run gate + edit) | ✅ Done | 2026-06-20 |
+| **M0.6** | Resume upload → Supabase + scratch `resume.md`; health check extended | 🟡 awaiting your verification | — |
 | M0.7 | Resume → profile auto-extraction (`extractProfile`) pre-fills intake | 🔲 | — |
 
 ---
 
-## ▶ CURRENT STEP — M0.5: Onboarding intake UI → profiles
+## ▶ CURRENT STEP — M0.6: Resume upload → Supabase + extended health
 
 **Status:** 🟡 In progress (awaiting your verification)
-**Goal (PRD §C.1 / M0.5):** a real first-run onboarding screen that captures the personalised profile and saves it (via M0.4's `/api/profile`); if a profile already exists, skip straight into the app, and allow editing it.
+**Goal (PRD §C.1 / M0.6):** uploading a resume parses it, stores it in Supabase (`resumes`) as the source of truth, still writes the local `data/resume.md` scratch for Claude, and `/api/health` reports Claude + Supabase + resume status. (Auto-extraction into the profile is the NEXT step, M0.7.)
 
 ### Implementation prompt (for Claude)
-> Build first-run onboarding (PRD §C.1, M0.5). Add `getProfile()`/`saveProfile()` + a `Profile` type to `app/src/lib/api.ts`. Add `app/src/components/Onboarding.tsx` — a polished, on-theme intake form (name, target role, experience level, known languages, tech stack, hours/week, goal, teaching style) that POSTs to `/api/profile`; it doubles as the profile editor when given an existing profile. In `app/src/App.tsx`, load the profile on mount: while loading show a tiny loader; if null (or the user chose "edit") render `Onboarding` (blocking on first run); otherwise render the existing Landing/modules and pass `userName` + `onEditProfile` to the nav. Add an "edit profile" chip to `TopNav`. Keep `npm run typecheck` green. Resume auto-fill is the NEXT step (M0.6/M0.7), not this one.
+> Extend resume handling (PRD §C.1, M0.6). Add `server/src/repo/resumes.ts` with `saveResume({filename, content_md, chars})` (insert) and `getLatestResume()` over the Supabase `resumes` table. In `server/src/index.ts`, after `/api/resume` writes the `data/resume.md` scratch, also `saveResume(...)` to Supabase and return the new `id`. Extend `GET /api/health` to report `provider` (the AIProvider id), `supabase: { configured }` (from `dbConfigured()`), and derive `hasResume`/`resumeName` from the latest Supabase resume (falling back to the local scratch). Keep the existing `claude` + `hasResume` fields so the frontend keeps working. Keep typecheck green. (No new UI — resume upload appears in onboarding in M0.7 with extraction.)
 
 ### What was built this step
-- `app/src/lib/api.ts` — `Profile` type + `getProfile()` / `saveProfile()`.
-- `app/src/components/Onboarding.tsx` — intake form (create + edit) → `POST /api/profile`, themed with the aurora design system.
-- `app/src/App.tsx` — loads the profile; gates first-run onboarding; passes `userName` + `onEditProfile` to the nav.
-- `app/src/components/TopNav.tsx` — a profile chip that reopens onboarding as an editor.
-- App typecheck passes.
+- `server/src/repo/resumes.ts` — `saveResume()` / `getLatestResume()`.
+- `server/src/index.ts` — `/api/resume` now also persists to Supabase (returns `id`); `/api/health` reports `provider`, `supabase.configured`, and resume status (Supabase-first, scratch fallback).
+- A sample resume for testing is at `/tmp/sample-resume.txt`. Typecheck passes.
 
-### How YOU verify
-Run **both** servers: `cd server && npm run dev` and (new terminal) `cd app && npm run dev`, then open http://localhost:5317.
+### How YOU verify (backend running, `server/.env` set)
+1. **Upload the sample resume:**
+   ```
+   curl -s -F "file=@/tmp/sample-resume.txt" localhost:4317/api/resume
+   ```
+   Expect `{"ok":true,"id":"...","filename":"sample-resume.txt","chars":...}`.
+2. **Health now reports Supabase + resume:**
+   ```
+   curl -s localhost:4317/api/health
+   ```
+   Expect `"provider":"claude_code"`, `"supabase":{"configured":true}`, `"hasResume":true`, `"resumeName":"sample-resume.txt"`.
+3. **Scratch for Claude:** `cat ../data/resume.md` → the resume text with frontmatter.
+4. *(Optional)* Supabase Studio → Table editor → `resumes` → see the row.
 
-Because the "Faiz" profile already exists (from M0.4), you'll see the **app skip onboarding** — that proves the gate. To check the rest:
-1. **Edit path (proves save + edit):** open any mode from the landing → in the top nav click the **"Faiz" chip** → onboarding opens **prefilled** → change something (e.g. add a language) → **Save changes** → it closes and persists. Reload — your change is still there.
-2. **First-run path (optional):** in Supabase Studio → Table editor → `profiles`, delete the row → reload the app → the **onboarding screen appears** → fill it in → **Start my journey** → lands in the app; reload goes straight in.
-
-**Pass = the app skips onboarding when a profile exists, the editor saves changes that persist, and (optional) a fresh profile shows onboarding on first run.**
-Tell me it works (or paste any issue) and I'll mark M0.5 ✅ and write the M0.6 prompt (resume upload → Supabase).
+**Pass = upload returns an `id`, health shows `supabase.configured:true` + `hasResume:true`, and `data/resume.md` exists.**
+Tell me it works (or paste output) and I'll mark M0.6 ✅ and write the **M0.7** prompt — the resume → profile auto-extraction (`extractProfile`) that pre-fills onboarding, the feature you asked for.
 
 **Verified:** —
 
@@ -94,7 +99,8 @@ Tell me it works (or paste any issue) and I'll mark M0.5 ✅ and write the M0.6 
 
 ## Changelog
 
-- **2026-06-20 — M0.5 built** (awaiting verification): onboarding intake UI (`Onboarding.tsx`) + `getProfile`/`saveProfile`; App gates first-run; TopNav edit chip.
+- **2026-06-20 — M0.6 built** (awaiting verification): resume upload persists to Supabase (`repo/resumes.ts`); `/api/health` extended (provider + supabase + resume).
+- **2026-06-20 — M0.5 ✅ Done:** onboarding intake UI (`Onboarding.tsx`) + `getProfile`/`saveProfile`; App gates first-run; TopNav edit chip.
 - **2026-06-20 — M0.4 ✅ Done:** persistence bridge verified via profile round-trip — `repo/profiles.ts`, `scratch.ts`, `GET/POST /api/profile`; `data/` fully git-ignored.
 - **2026-06-20 — M0.3 ✅ Done:** AIProvider abstraction verified via `/ask` round-trip (`server/src/ai/*`); `/ask` + `/api/health` routed through it.
 - **2026-06-20 — M0.2 decided:** no login for now (local single-user); folds into M0.5 onboarding.

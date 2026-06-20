@@ -10,7 +10,9 @@ import multer from "multer";
 
 import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
 import { getAIProvider } from "./ai/index.js";
+import { dbConfigured } from "./db.js";
 import { getProfile, upsertProfile, type Profile } from "./repo/profiles.js";
+import { saveResume, getLatestResume } from "./repo/resumes.js";
 import { materializeProfile } from "./scratch.js";
 import {
   mockInterviewer,
@@ -90,15 +92,33 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 let busy = false;
 
 app.get("/api/health", async (_req, res) => {
-  const claude = await getAIProvider().isAvailable();
+  const provider = getAIProvider();
+  const claude = await provider.isAvailable();
+  const supabase = { configured: dbConfigured() };
   let resumeName: string | undefined;
-  try {
-    const { data } = matter(await fs.readFile(path.join(REPO_ROOT, "data", "resume.md"), "utf8"));
-    resumeName = String((data as any).filename ?? "résumé on file");
-  } catch {
-    /* no resume yet */
+  let hasResume = false;
+  // Supabase is the source of truth for the resume; fall back to the local scratch.
+  if (supabase.configured) {
+    try {
+      const latest = await getLatestResume();
+      if (latest) {
+        hasResume = true;
+        resumeName = latest.filename ?? "résumé on file";
+      }
+    } catch {
+      /* db unreachable — fall through to scratch */
+    }
   }
-  res.json({ ok: true, claude, hasResume: !!resumeName, resumeName });
+  if (!hasResume) {
+    try {
+      const { data } = matter(await fs.readFile(path.join(REPO_ROOT, "data", "resume.md"), "utf8"));
+      resumeName = String((data as any).filename ?? "résumé on file");
+      hasResume = true;
+    } catch {
+      /* no resume yet */
+    }
+  }
+  res.json({ ok: true, provider: provider.id, claude, supabase, hasResume, resumeName });
 });
 
 /** Read a single data file (raw + frontmatter). Path-guarded to data dirs. */
@@ -161,7 +181,9 @@ app.post("/api/resume", upload.single("file"), async (req, res) => {
       chars: text.length,
     });
     await atomicWrite(path.join(REPO_ROOT, "data", "resume.md"), content);
-    res.json({ ok: true, filename: file.originalname, chars: text.length });
+    // Persist to Supabase (source of truth); the scratch file above is for Claude.
+    const saved = await saveResume({ filename: file.originalname, content_md: text, chars: text.length });
+    res.json({ ok: true, id: saved.id, filename: file.originalname, chars: text.length });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
