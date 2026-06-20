@@ -544,7 +544,7 @@ Evolve today's Express server. Keep the NDJSON streaming contract.
 
 | Phase | Theme | Milestones | Status | Target |
 |---|---|---|---|---|
-| **0** | Foundation: Supabase, AIProvider, onboarding, resume extraction | M0.1–M0.7 | 🔲 | — |
+| **0** | Foundation: Supabase, AIProvider, onboarding, resume extraction | M0.1–M0.7 | 🟡 | M0.1/M0.3 ✅ · M0.4 in verify |
 | **1** | Learn engine v1 (Python): roadmap → daily → compiler → progress | M1.1–M1.7 | 🔲 | — |
 | **2** | DSA learning track + visual learning v1 | M2.1–M2.6 | 🔲 | — |
 | **3** | DSA contests (timed, judged, recorded, AI analysis) | M3.1–M3.5 | 🔲 | — |
@@ -563,10 +563,10 @@ Evolve today's Express server. Keep the NDJSON streaming contract.
 
 | ID | Milestone | DoD | Status |
 |---|---|---|---|
-| M0.1 | Supabase project + base schema (profiles, ai_settings, resumes, user_stats) | Tables exist; reads/writes work from the app. | 🔲 |
-| M0.2 | First-run setup (optional single-account auth) | First launch → straight into onboarding; cloud data reachable. | 🔲 |
-| M0.3 | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | Existing actions run unchanged through the new interface. | 🔲 |
-| M0.4 | Bridge persists AI output to Supabase (ADR-3 pattern) + materializes scratch files | A test action's result lands in a Supabase row; scratch file written for Claude. | 🔲 |
+| M0.1 | Supabase project + base schema (profiles, ai_settings, resumes, user_stats) | Tables exist; reads/writes work from the app. | ✅ |
+| M0.2 | First-run setup (optional single-account auth) | First launch → straight into onboarding; cloud data reachable. | ⏭️ decided: no login for now |
+| M0.3 | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | Existing actions run unchanged through the new interface. | ✅ |
+| M0.4 | Bridge persists app data to Supabase (ADR-3 pattern) + materializes scratch files | Profile round-trips through Supabase; scratch file written for Claude. | 🟡 |
 | M0.5 | Onboarding intake UI → `profiles` | Complete intake; profile row persists; edits work. | 🔲 |
 | M0.6 | Resume upload → Supabase + scratch `resume.md`; health check extended | Resume stored; health shows Claude/API/Supabase status. | 🔲 |
 | M0.7 | **Resume → profile auto-extraction** (`extractProfile`): parse resume → propose role/languages/stack/projects/strengths/gaps → pre-fill intake for confirmation | Uploading a resume auto-fills the intake form; extracted insights persist on the profile. | 🔲 |

@@ -53,51 +53,53 @@ We build **one step at a time**, and a step is only ✅ Done after the **user ve
 
 | ID | Milestone | Status | Verified |
 |---|---|---|---|
-| **M0.1** | Supabase project + base schema (profiles, ai_settings, resumes, user_stats) | 🟡 awaiting your verification | — |
-| M0.2 | First-run setup (optional single-account auth) | 🔲 | — |
-| M0.3 | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | 🔲 | — |
-| M0.4 | Bridge persists AI output to Supabase + materializes scratch files | 🔲 | — |
+| **M0.1** | Supabase project + base schema (profiles, ai_settings, resumes, user_stats) | ✅ Done | 2026-06-20 (`db:check`) |
+| M0.2 | First-run setup / auth | ⏭️ Decided — no login for now (local single-user); revisit only if cloud sync needs it | 2026-06-20 |
+| **M0.3** | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | ✅ Done | 2026-06-20 (`/ask` round-trip) |
+| **M0.4** | Persistence bridge: server writes app data → Supabase + materializes scratch files | 🟡 awaiting your verification | — |
 | M0.5 | Onboarding intake UI → `profiles` | 🔲 | — |
 | M0.6 | Resume upload → Supabase + scratch `resume.md`; health check extended | 🔲 | — |
 | M0.7 | Resume → profile auto-extraction (`extractProfile`) pre-fills intake | 🔲 | — |
 
 ---
 
-## ▶ CURRENT STEP — M0.1: Supabase project + base schema
+## ▶ CURRENT STEP — M0.4: Persistence bridge (server → Supabase) + scratch files
 
 **Status:** 🟡 In progress (awaiting your verification)
-**Goal (PRD §F.1):** a Supabase instance exists with the Phase 0 base tables, and the app can read/write them.
+**Goal (PRD ADR-3/ADR-4 / M0.4):** establish the pattern where the server persists app data to Supabase and materializes disposable scratch files for Claude. Demonstrated with a real `profiles` read/write round-trip.
 
 ### Implementation prompt (for Claude)
-> Stand up the Supabase persistence layer for the single-user ICM. Create a SQL migration for the four Phase 0 tables — `profiles`, `ai_settings`, `resumes`, `user_stats` — single-user (no `user_id`, no RLS), matching PRD §D.4. Add a lazy, optional Supabase client in the server (`server/src/db.ts`) that reads `SUPABASE_URL` + service/anon key from `server/.env` and does **not** break startup when unset. Add a `db:check` script (`server/src/db-check.ts`) that connects and confirms all four tables exist (the DoD check). Provide `.env.example`. Do not wire endpoints yet — that's later milestones. Keep typecheck green.
+> Build the persistence bridge (PRD ADR-3/ADR-4). Add `server/src/repo/profiles.ts` with `getProfile()` (the singleton profile or null) and `upsertProfile(patch)` (insert if none, else update) over the Supabase `profiles` table via `getDb()`. Add `server/src/scratch.ts` with `writeScratch(name, content)` (atomic write under `data/`) and `materializeProfile(profile)` (renders `data/profile.md` for Claude). Add `GET /api/profile` and `POST /api/profile` to `server/src/index.ts` — POST upserts then materializes the scratch file. Ensure `data/` scratch is git-ignored (keep the folder via `.gitkeep`). Keep typecheck green. (No UI yet — that's M0.5.)
 
 ### What was built this step
-- `supabase/migrations/0001_init.sql` — the four base tables (single-user).
-- `server/src/db.ts` — lazy/optional Supabase client (`getDb()`, `dbConfigured()`).
-- `server/src/db-check.ts` + `npm run db:check` — connection + table-existence check.
-- `server/.env.example` — `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`.
-- Added deps `@supabase/supabase-js`, `dotenv`. Typecheck passes; `db:check` runs (reports "not configured" until you connect Supabase).
+- `server/src/repo/profiles.ts` — `getProfile()` / `upsertProfile()` (singleton) + `Profile` type.
+- `server/src/scratch.ts` — `writeScratch()` (atomic) + `materializeProfile()` → `data/profile.md`.
+- `server/src/index.ts` — `GET /api/profile` and `POST /api/profile` (upsert → materialize scratch).
+- `.gitignore` — now ignores all of `data/` (scratch); `data/.gitkeep` keeps the folder. Typecheck passes.
 
-### How YOU verify (do this, then tell me if you see all ✓)
-Pick **one** way to get a Supabase, then connect + check:
+### How YOU verify (do this, then tell me the round-trip works)
+With `server/.env` set (from M0.1) and the backend running (`npm run dev`):
+1. **Write a profile** (this hits Supabase + writes the scratch file):
+   ```
+   curl -s -X POST localhost:4317/api/profile \
+     -H 'content-type: application/json' \
+     -d '{"display_name":"Faiz","target_role":"AI Engineer","experience_level":"mid","known_languages":["Python"],"hours_per_week":10,"goal":"Land an AI Eng role"}'
+   ```
+   Expect `{"ok":true,"profile":{...,"id":"...","display_name":"Faiz",...}}`.
+2. **Read it back:**
+   ```
+   curl -s localhost:4317/api/profile
+   ```
+   Expect the same profile returned.
+3. **Scratch file written for Claude:**
+   ```
+   cat ../data/profile.md
+   ```
+   Expect a markdown profile with your name/role/goal.
+4. *(Optional)* In Supabase Studio → Table editor → `profiles` → see the one row.
 
-**Option A — Cloud (no Docker):**
-1. Create a free project at supabase.com → open it.
-2. **SQL Editor** → paste the contents of `supabase/migrations/0001_init.sql` → Run.
-3. **Project Settings → API** → copy the **Project URL** and the **service_role** key.
-4. `cp server/.env.example server/.env` and fill `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`.
-
-**Option B — Local (needs Docker + Supabase CLI):**
-1. `npx supabase init` (once), then `npx supabase start`.
-2. `npx supabase db push` (applies the migration).
-3. Put the printed API URL + service_role key into `server/.env`.
-
-**Then, from `server/`:**
-```
-npm run db:check
-```
-**Pass = you see `✓ profiles`, `✓ ai_settings`, `✓ resumes`, `✓ user_stats` and "M0.1 verified."**
-Tell me it passed (or paste any error) and I'll mark M0.1 ✅ and write the M0.2 prompt.
+**Pass = POST returns the saved profile with an `id`, GET returns it, and `data/profile.md` exists.**
+Tell me it works (or paste output) and I'll mark M0.4 ✅ and write the M0.5 prompt (onboarding intake UI).
 
 **Verified:** —
 
@@ -105,8 +107,12 @@ Tell me it passed (or paste any error) and I'll mark M0.1 ✅ and write the M0.2
 
 ## Changelog
 
-- _(pending)_ M0.1 scaffolding built; awaiting user verification.
-- Pre-step: cleared throwaway local data (sample `mocks/*.md` + `data/resume.md`); wrote PRD + this tracker. Committed `1cb56c6`.
+- **2026-06-20 — M0.4 built** (awaiting verification): persistence bridge — `repo/profiles.ts`, `scratch.ts`, `GET/POST /api/profile`; `data/` fully git-ignored.
+- **2026-06-20 — M0.3 ✅ Done:** AIProvider abstraction verified via `/ask` round-trip (`server/src/ai/*`); `/ask` + `/api/health` routed through it.
+- **2026-06-20 — M0.2 decided:** no login for now (local single-user); folds into M0.5 onboarding.
+- **2026-06-20 — M0.1 ✅ Done:** Supabase base schema verified via `db:check` (all 4 tables present).
+- M0.1 scaffolding committed (`1cb56c6`, `b988cc2`).
+- Pre-step: cleared throwaway local data (sample `mocks/*.md` + `data/resume.md`); wrote PRD + this tracker.
 
 ---
 

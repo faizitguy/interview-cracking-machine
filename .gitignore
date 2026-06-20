@@ -10,11 +10,10 @@ app/dist/
 server/dist/
 .vite/
 
-# Generated cache (per spec section 5: derived/cache is git-ignored)
-data/index.json
-
-# The uploaded resume is personal data — never commit it
-data/resume.md
+# data/ is disposable AI scratch + personal data — Supabase is the source of truth (ADR-4).
+# Never commit any of it; keep the folder via .gitkeep.
+data/*
+!data/.gitkeep
 
 # Tauri (Phase 7)
 src-tauri/target/

@@ -9,7 +9,9 @@ import matter from "gray-matter";
 import multer from "multer";
 
 import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
-import { runClaude, checkClaudeInstalled, type ClaudeEvent } from "./claude.js";
+import { getAIProvider } from "./ai/index.js";
+import { getProfile, upsertProfile, type Profile } from "./repo/profiles.js";
+import { materializeProfile } from "./scratch.js";
 import {
   mockInterviewer,
   mockScore,
@@ -88,7 +90,7 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 let busy = false;
 
 app.get("/api/health", async (_req, res) => {
-  const claude = await checkClaudeInstalled();
+  const claude = await getAIProvider().isAvailable();
   let resumeName: string | undefined;
   try {
     const { data } = matter(await fs.readFile(path.join(REPO_ROOT, "data", "resume.md"), "utf8"));
@@ -192,6 +194,26 @@ app.get("/api/rounds", (_req, res) => {
   res.json({ rounds: ROUNDS.map((r) => ({ id: r.id, label: r.label })) });
 });
 
+/** GET /api/profile — the single-user profile (or null if onboarding hasn't run). */
+app.get("/api/profile", async (_req, res) => {
+  try {
+    res.json({ profile: await getProfile() });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/** POST /api/profile — upsert the profile (Supabase) and materialize scratch for Claude. */
+app.post("/api/profile", async (req, res) => {
+  try {
+    const saved = await upsertProfile((req.body ?? {}) as Partial<Profile>);
+    await materializeProfile(saved);
+    res.json({ ok: true, profile: saved });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 /** GET /api/tts/voices — Kokoro voice catalog + whether the model is loaded. */
 app.get("/api/tts/voices", (_req, res) => {
   res.json({ ready: ttsReady(), default: DEFAULT_VOICE, voices: VOICES });
@@ -245,10 +267,11 @@ app.post("/ask", async (req, res) => {
   res.writeHead(200, { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-cache" });
   const send = (obj: unknown) => res.write(JSON.stringify(obj) + "\n");
   try {
-    const result = await runClaude(prompt, typeof sessionId === "string" ? sessionId : null, {
-      onEvent: (event: ClaudeEvent) => send(event),
-    });
-    send({ type: "done", sessionId: result.sessionId, result: result.result });
+    const result = await getAIProvider().run(
+      { prompt, sessionId: typeof sessionId === "string" ? sessionId : null },
+      (event) => send(event),
+    );
+    send({ type: "done", sessionId: result.sessionId, result: result.text });
   } catch (err) {
     send({ type: "error", message: (err as Error).message });
   } finally {
