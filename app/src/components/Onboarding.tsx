@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
-import { Sparkles } from "lucide-react";
-import { saveProfile, type Profile } from "../lib/api";
+import { useState, type ReactNode, type ChangeEvent } from "react";
+import { FileUp, Sparkles } from "lucide-react";
+import { saveProfile, uploadResume, extractProfile, type Profile, type ExtractedProfile } from "../lib/api";
 
 const LEVELS = [
   { v: "new", label: "New to it" },
@@ -22,9 +22,9 @@ const inputCls =
   "w-full rounded-xl border border-edge bg-panel/60 px-3.5 py-2.5 text-sm text-bright placeholder:text-faint transition-colors focus:border-violet focus:outline-none";
 
 /**
- * First-run onboarding (and later, profile editor). Collects the personalised
- * profile that every roadmap / lesson / mock is tailored to, and saves it to
- * Supabase via the bridge (POST /api/profile). PRD M0.5.
+ * First-run onboarding (and later, profile editor). Optionally imports a resume
+ * and uses the AI to pre-fill the form (M0.7); then saves the personalised
+ * profile to Supabase via the bridge (POST /api/profile). PRD §C.1.
  */
 export default function Onboarding({
   initial,
@@ -47,8 +47,41 @@ export default function Onboarding({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string>();
 
+  // Resume import (M0.7)
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string>();
+  const [extracted, setExtracted] = useState<ExtractedProfile | null>(null);
+
   const csv = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
   const canSave = !!(name.trim() && role.trim() && goal.trim());
+
+  async function onResume(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    setErr(undefined);
+    setImportMsg("Uploading…");
+    try {
+      await uploadResume(file);
+      setImportMsg("Reading your resume…");
+      const p = await extractProfile();
+      setExtracted(p);
+      if (p.display_name) setName(p.display_name);
+      if (p.target_role) setRole(p.target_role);
+      const lvl = (p.experience_level ?? "").toLowerCase();
+      if (LEVELS.some((l) => l.v === lvl)) setLevel(lvl);
+      if (p.known_languages?.length) setLangs(p.known_languages.join(", "));
+      if (p.tech_stack?.length) setStack(p.tech_stack.join(", "));
+      if (p.suggested_goal && !goal.trim()) setGoal(p.suggested_goal);
+      setImportMsg(`Imported ${file.name} — review & edit below.`);
+    } catch (e2) {
+      setImportMsg(undefined);
+      setErr((e2 as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function submit() {
     setSaving(true);
@@ -63,6 +96,7 @@ export default function Onboarding({
         hours_per_week: hours ? Number(hours) : null,
         goal: goal.trim() || null,
         default_teaching_style: style,
+        ...(extracted ? { resume_insights: extracted } : {}),
       });
       onSaved(saved);
     } catch (e) {
@@ -86,10 +120,43 @@ export default function Onboarding({
             <p className="mt-0.5 text-[13px] text-muted">
               {editing
                 ? "Update anything — your mentor adapts from here."
-                : "A minute now makes every roadmap, lesson, and mock fit you."}
+                : "Import your resume to auto-fill, or just tell me about yourself."}
             </p>
           </div>
         </div>
+
+        {/* Resume import → AI auto-fill (first run only) */}
+        {!editing && (
+          <div className="mb-6 rounded-2xl border border-dashed border-edge2 bg-panel/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-soft">
+                  Import your resume <span className="text-faint">· optional</span>
+                </p>
+                <p className="truncate text-[11px] text-muted">
+                  {importMsg ?? "PDF, DOCX, or TXT — I'll read it and fill this in for you."}
+                </p>
+              </div>
+              <label
+                className={`btn-primary inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl px-3.5 py-2 text-[13px] font-semibold ${
+                  importing ? "pointer-events-none opacity-60" : ""
+                }`}
+              >
+                <FileUp size={14} /> {importing ? "Reading…" : "Upload"}
+                <input type="file" accept=".pdf,.docx,.doc,.txt,.md" hidden disabled={importing} onChange={onResume} />
+              </label>
+            </div>
+            {extracted && (extracted.gaps?.length || extracted.strengths?.length) ? (
+              <p className="mt-2.5 flex items-start gap-1.5 text-[11px] text-faint">
+                <Sparkles size={12} className="mt-px shrink-0 text-amber" />
+                <span>
+                  {extracted.strengths?.length ? `Strengths: ${extracted.strengths.slice(0, 3).join(", ")}. ` : ""}
+                  {extracted.gaps?.length ? `Gaps to close: ${extracted.gaps.slice(0, 3).join(", ")}.` : ""}
+                </span>
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <div className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -164,11 +231,6 @@ export default function Onboarding({
               <button className="rounded-xl px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:text-soft" onClick={onCancel}>
                 Cancel
               </button>
-            )}
-            {!editing && (
-              <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-faint">
-                <Sparkles size={12} /> Resume import comes next
-              </span>
             )}
           </div>
         </div>

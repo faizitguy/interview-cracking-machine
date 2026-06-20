@@ -11,8 +11,9 @@ import multer from "multer";
 import { PORT, REPO_ROOT, WATCH_DIRS, today } from "./config.js";
 import { getAIProvider } from "./ai/index.js";
 import { dbConfigured } from "./db.js";
+import { parseJsonObject } from "./json.js";
 import { getProfile, upsertProfile, type Profile } from "./repo/profiles.js";
-import { saveResume, getLatestResume } from "./repo/resumes.js";
+import { saveResume, getLatestResume, setLatestResumeInsights } from "./repo/resumes.js";
 import { materializeProfile } from "./scratch.js";
 import {
   mockInterviewer,
@@ -21,6 +22,7 @@ import {
   learnLesson,
   practiceQuestion,
   practiceFeedback,
+  extractProfile,
   ROUNDS,
 } from "./prompts.js";
 import { parseResume } from "./resume.js";
@@ -186,6 +188,42 @@ app.post("/api/resume", upload.single("file"), async (req, res) => {
     res.json({ ok: true, id: saved.id, filename: file.originalname, chars: text.length });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+/**
+ * POST /api/extract-profile — read the latest resume (or `resumeText` from the
+ * body) with the AI and return a structured profile proposal to pre-fill
+ * onboarding (M0.7). Insights are persisted on the resume row.
+ */
+app.post("/api/extract-profile", async (req, res) => {
+  if (busy) {
+    res.status(409).json({ error: "An AI action is already running. Try again in a moment." });
+    return;
+  }
+  let resumeText = String(req.body?.resumeText ?? "");
+  if (!resumeText) {
+    const latest = await getLatestResume().catch(() => null);
+    resumeText = String(latest?.content_md ?? "");
+  }
+  if (resumeText.trim().length < 30) {
+    res.status(422).json({ error: "no resume on file — upload one first" });
+    return;
+  }
+  busy = true;
+  try {
+    const result = await getAIProvider().run({ prompt: extractProfile(resumeText) }, () => {});
+    const parsed = parseJsonObject(result.text ?? "");
+    if (!parsed) {
+      res.status(502).json({ error: "couldn't parse the extracted profile" });
+      return;
+    }
+    await setLatestResumeInsights(parsed).catch(() => {});
+    res.json({ ok: true, profile: parsed });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  } finally {
+    busy = false;
   }
 });
 

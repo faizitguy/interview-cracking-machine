@@ -104,6 +104,39 @@ export function mockInterviewer(roundId: string, role: string, level: string): s
   ].join("\n");
 }
 
+/**
+ * Read a resume and propose a structured profile to pre-fill onboarding (M0.7).
+ * Must return strict JSON so the bridge can parse + persist it (ADR-3).
+ */
+export function extractProfile(resumeText: string): string {
+  return [
+    `You are reading a candidate's resume to PRE-FILL their interview-prep`,
+    `profile. Read it carefully and infer the fields below.`,
+    ``,
+    `Resume:`,
+    `"""`,
+    resumeText.slice(0, 12000),
+    `"""`,
+    ``,
+    `Output ONLY a single JSON object — no prose, no markdown fences, no tool use —`,
+    `with EXACTLY these keys:`,
+    `{`,
+    `  "display_name": string,        // their full name, or "" if unclear`,
+    `  "target_role": string,         // the role they're targeting (e.g. "AI Engineer")`,
+    `  "experience_level": "new" | "junior" | "mid" | "senior",`,
+    `  "known_languages": string[],   // programming languages they clearly know`,
+    `  "tech_stack": string[],        // frameworks, tools, databases`,
+    `  "projects": string[],          // 2-5 short project names or one-line descriptions`,
+    `  "strengths": string[],         // 2-4 strengths for their target role`,
+    `  "gaps": string[],              // 2-4 likely gaps to close for that role`,
+    `  "suggested_goal": string       // one concise goal sentence`,
+    `}`,
+    ``,
+    `Base every field on the resume. If something is genuinely unknown, use "" or [].`,
+    `Respond with the JSON object and nothing else.`,
+  ].join("\n");
+}
+
 // ============================================================================
 // LEARN module — curriculum / topic tracks.
 // Stateless: these prompts ask Claude to REPLY with content (no file writes).

@@ -58,40 +58,43 @@ We build **one step at a time**, and a step is only ✅ Done after the **user ve
 | **M0.3** | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | ✅ Done | 2026-06-20 (`/ask` round-trip) |
 | **M0.4** | Persistence bridge: server writes app data → Supabase + materializes scratch files | ✅ Done | 2026-06-20 (profile round-trip) |
 | **M0.5** | Onboarding intake UI → `profiles` (first-run gate + edit) | ✅ Done | 2026-06-20 |
-| **M0.6** | Resume upload → Supabase + scratch `resume.md`; health check extended | 🟡 awaiting your verification | — |
-| M0.7 | Resume → profile auto-extraction (`extractProfile`) pre-fills intake | 🔲 | — |
+| **M0.6** | Resume upload → Supabase + scratch `resume.md`; health check extended | ✅ Done | 2026-06-20 |
+| **M0.7** | Resume → profile auto-extraction (`extractProfile`) pre-fills intake | 🟡 awaiting your verification | — |
 
 ---
 
-## ▶ CURRENT STEP — M0.6: Resume upload → Supabase + extended health
+## ▶ CURRENT STEP — M0.7: Resume → profile auto-extraction (last Phase 0 step)
 
 **Status:** 🟡 In progress (awaiting your verification)
-**Goal (PRD §C.1 / M0.6):** uploading a resume parses it, stores it in Supabase (`resumes`) as the source of truth, still writes the local `data/resume.md` scratch for Claude, and `/api/health` reports Claude + Supabase + resume status. (Auto-extraction into the profile is the NEXT step, M0.7.)
+**Goal (PRD §C.1 / M0.7):** upload a resume → the AI reads it → proposes a structured profile (role, languages, stack, projects, strengths, gaps, goal) → onboarding pre-fills those fields for you to confirm + edit. First real "AI generates structured JSON → backend parses + persists" action (ADR-3).
 
 ### Implementation prompt (for Claude)
-> Extend resume handling (PRD §C.1, M0.6). Add `server/src/repo/resumes.ts` with `saveResume({filename, content_md, chars})` (insert) and `getLatestResume()` over the Supabase `resumes` table. In `server/src/index.ts`, after `/api/resume` writes the `data/resume.md` scratch, also `saveResume(...)` to Supabase and return the new `id`. Extend `GET /api/health` to report `provider` (the AIProvider id), `supabase: { configured }` (from `dbConfigured()`), and derive `hasResume`/`resumeName` from the latest Supabase resume (falling back to the local scratch). Keep the existing `claude` + `hasResume` fields so the frontend keeps working. Keep typecheck green. (No new UI — resume upload appears in onboarding in M0.7 with extraction.)
+> Build resume → profile auto-extraction (PRD §C.1, M0.7). Backend: add `extractProfile(resumeText)` to `server/src/prompts.ts` returning a prompt that asks for STRICT JSON (display_name, target_role, experience_level∈new/junior/mid/senior, known_languages[], tech_stack[], projects[], strengths[], gaps[], suggested_goal). Add `server/src/json.ts` `parseJsonObject()` (tolerates fences/prose). Add `setLatestResumeInsights()` to `repo/resumes.ts`. Add `POST /api/extract-profile` to `index.ts` — read the latest resume (or `resumeText` body), run the AIProvider, parse JSON, persist insights on the resume row, return the proposal (use the `busy` lock). Frontend: add `extractProfile()` + `ExtractedProfile` to `lib/api.ts`; in `Onboarding.tsx` add a resume Upload control (first-run) that calls `uploadResume` then `extractProfile`, pre-fills the form, shows strengths/gaps, and includes the insights as `resume_insights` when saving. Keep both typechecks green.
 
 ### What was built this step
-- `server/src/repo/resumes.ts` — `saveResume()` / `getLatestResume()`.
-- `server/src/index.ts` — `/api/resume` now also persists to Supabase (returns `id`); `/api/health` reports `provider`, `supabase.configured`, and resume status (Supabase-first, scratch fallback).
-- A sample resume for testing is at `/tmp/sample-resume.txt`. Typecheck passes.
+- `server/src/prompts.ts` — `extractProfile(resumeText)` (strict-JSON prompt).
+- `server/src/json.ts` — `parseJsonObject()`.
+- `server/src/repo/resumes.ts` — `setLatestResumeInsights()`.
+- `server/src/index.ts` — `POST /api/extract-profile` (AI → parse → persist → return).
+- `app/src/lib/api.ts` — `extractProfile()` + `ExtractedProfile`.
+- `app/src/components/Onboarding.tsx` — resume Upload that auto-fills the form + shows strengths/gaps; saves `resume_insights`. Both typechecks pass.
 
-### How YOU verify (backend running, `server/.env` set)
-1. **Upload the sample resume:**
-   ```
-   curl -s -F "file=@/tmp/sample-resume.txt" localhost:4317/api/resume
-   ```
-   Expect `{"ok":true,"id":"...","filename":"sample-resume.txt","chars":...}`.
-2. **Health now reports Supabase + resume:**
-   ```
-   curl -s localhost:4317/api/health
-   ```
-   Expect `"provider":"claude_code"`, `"supabase":{"configured":true}`, `"hasResume":true`, `"resumeName":"sample-resume.txt"`.
-3. **Scratch for Claude:** `cat ../data/resume.md` → the resume text with frontmatter.
-4. *(Optional)* Supabase Studio → Table editor → `resumes` → see the row.
+### How YOU verify
+**Quick backend check** (a resume must be uploaded first — the M0.6 curl, or upload below):
+```
+curl -s -X POST localhost:4317/api/extract-profile -H 'content-type: application/json' -d '{}'
+```
+Expect `{"ok":true,"profile":{"display_name":"Faiz Ahmed Khan","target_role":"AI Engineer","known_languages":[...],"strengths":[...],"gaps":[...],...}}`.
 
-**Pass = upload returns an `id`, health shows `supabase.configured:true` + `hasResume:true`, and `data/resume.md` exists.**
-Tell me it works (or paste output) and I'll mark M0.6 ✅ and write the **M0.7** prompt — the resume → profile auto-extraction (`extractProfile`) that pre-fills onboarding, the feature you asked for.
+**Full UI flow** (both servers running):
+1. In Supabase Studio → Table editor → `profiles`, **delete the row** (so onboarding shows).
+2. Reload http://localhost:5317 → the onboarding screen appears.
+3. Click **Upload** → choose `/tmp/sample-resume.txt` (or your real resume).
+4. It shows "Reading your resume…", then **auto-fills** name/role/level/languages/stack/goal and lists **strengths/gaps**.
+5. Review/edit → **Start my journey** → lands in the app; reload goes straight in.
+
+**Pass = the endpoint returns structured JSON, and in the UI the resume auto-fills the form; saving persists.**
+Tell me it works (or paste output) and I'll mark M0.7 ✅ — **which completes Phase 0** — and write the first **Phase 1** prompt (the Learn-Python roadmap).
 
 **Verified:** —
 
@@ -99,7 +102,8 @@ Tell me it works (or paste output) and I'll mark M0.6 ✅ and write the **M0.7**
 
 ## Changelog
 
-- **2026-06-20 — M0.6 built** (awaiting verification): resume upload persists to Supabase (`repo/resumes.ts`); `/api/health` extended (provider + supabase + resume).
+- **2026-06-20 — M0.7 built** (awaiting verification): resume → profile auto-extraction — `extractProfile` prompt, `json.ts`, `POST /api/extract-profile`, onboarding auto-fill. Last Phase 0 step.
+- **2026-06-20 — M0.6 ✅ Done:** resume upload persists to Supabase (`repo/resumes.ts`); `/api/health` extended (provider + supabase + resume).
 - **2026-06-20 — M0.5 ✅ Done:** onboarding intake UI (`Onboarding.tsx`) + `getProfile`/`saveProfile`; App gates first-run; TopNav edit chip.
 - **2026-06-20 — M0.4 ✅ Done:** persistence bridge verified via profile round-trip — `repo/profiles.ts`, `scratch.ts`, `GET/POST /api/profile`; `data/` fully git-ignored.
 - **2026-06-20 — M0.3 ✅ Done:** AIProvider abstraction verified via `/ask` round-trip (`server/src/ai/*`); `/ask` + `/api/health` routed through it.

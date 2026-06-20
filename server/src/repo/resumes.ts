@@ -44,3 +44,11 @@ export async function getLatestResume(): Promise<Resume | null> {
   if (error) throw new Error(error.message);
   return (data as Resume) ?? null;
 }
+
+/** Attach extracted insights (from extractProfile) to the latest resume row. */
+export async function setLatestResumeInsights(insights: unknown): Promise<void> {
+  const latest = await getLatestResume();
+  if (!latest?.id) return;
+  const { error } = await db().from(TABLE).update({ insights }).eq("id", latest.id);
+  if (error) throw new Error(error.message);
+}

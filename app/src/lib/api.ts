@@ -117,7 +117,7 @@ export async function appendFile(path: string, content: string): Promise<void> {
   });
 }
 
-/** Upload a resume (PDF/DOCX/txt) — parsed server-side into data/resume.md. */
+/** Upload a resume (PDF/DOCX/txt) — parsed + stored in Supabase + scratch. */
 export async function uploadResume(file: File): Promise<{ filename: string; chars: number }> {
   const fd = new FormData();
   fd.append("file", file);
@@ -125,6 +125,31 @@ export async function uploadResume(file: File): Promise<{ filename: string; char
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `Upload failed (${r.status})`);
   return j;
+}
+
+/** AI-proposed profile fields read from the uploaded resume (M0.7). */
+export interface ExtractedProfile {
+  display_name?: string;
+  target_role?: string;
+  experience_level?: string;
+  known_languages?: string[];
+  tech_stack?: string[];
+  projects?: string[];
+  strengths?: string[];
+  gaps?: string[];
+  suggested_goal?: string;
+}
+
+/** Ask the AI to read the latest uploaded resume and propose profile fields. */
+export async function extractProfile(): Promise<ExtractedProfile> {
+  const r = await fetch("/api/extract-profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Extraction failed (${r.status})`);
+  return j.profile;
 }
 
 /** The single-user profile (mirrors the Supabase `profiles` row). */
