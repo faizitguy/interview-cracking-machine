@@ -56,50 +56,37 @@ We build **one step at a time**, and a step is only ✅ Done after the **user ve
 | **M0.1** | Supabase project + base schema (profiles, ai_settings, resumes, user_stats) | ✅ Done | 2026-06-20 (`db:check`) |
 | M0.2 | First-run setup / auth | ⏭️ Decided — no login for now (local single-user); revisit only if cloud sync needs it | 2026-06-20 |
 | **M0.3** | `AIProvider` abstraction; `ClaudeCodeProvider` reimplements today's behavior | ✅ Done | 2026-06-20 (`/ask` round-trip) |
-| **M0.4** | Persistence bridge: server writes app data → Supabase + materializes scratch files | 🟡 awaiting your verification | — |
-| M0.5 | Onboarding intake UI → `profiles` | 🔲 | — |
+| **M0.4** | Persistence bridge: server writes app data → Supabase + materializes scratch files | ✅ Done | 2026-06-20 (profile round-trip) |
+| **M0.5** | Onboarding intake UI → `profiles` (first-run gate + edit) | 🟡 awaiting your verification | — |
 | M0.6 | Resume upload → Supabase + scratch `resume.md`; health check extended | 🔲 | — |
 | M0.7 | Resume → profile auto-extraction (`extractProfile`) pre-fills intake | 🔲 | — |
 
 ---
 
-## ▶ CURRENT STEP — M0.4: Persistence bridge (server → Supabase) + scratch files
+## ▶ CURRENT STEP — M0.5: Onboarding intake UI → profiles
 
 **Status:** 🟡 In progress (awaiting your verification)
-**Goal (PRD ADR-3/ADR-4 / M0.4):** establish the pattern where the server persists app data to Supabase and materializes disposable scratch files for Claude. Demonstrated with a real `profiles` read/write round-trip.
+**Goal (PRD §C.1 / M0.5):** a real first-run onboarding screen that captures the personalised profile and saves it (via M0.4's `/api/profile`); if a profile already exists, skip straight into the app, and allow editing it.
 
 ### Implementation prompt (for Claude)
-> Build the persistence bridge (PRD ADR-3/ADR-4). Add `server/src/repo/profiles.ts` with `getProfile()` (the singleton profile or null) and `upsertProfile(patch)` (insert if none, else update) over the Supabase `profiles` table via `getDb()`. Add `server/src/scratch.ts` with `writeScratch(name, content)` (atomic write under `data/`) and `materializeProfile(profile)` (renders `data/profile.md` for Claude). Add `GET /api/profile` and `POST /api/profile` to `server/src/index.ts` — POST upserts then materializes the scratch file. Ensure `data/` scratch is git-ignored (keep the folder via `.gitkeep`). Keep typecheck green. (No UI yet — that's M0.5.)
+> Build first-run onboarding (PRD §C.1, M0.5). Add `getProfile()`/`saveProfile()` + a `Profile` type to `app/src/lib/api.ts`. Add `app/src/components/Onboarding.tsx` — a polished, on-theme intake form (name, target role, experience level, known languages, tech stack, hours/week, goal, teaching style) that POSTs to `/api/profile`; it doubles as the profile editor when given an existing profile. In `app/src/App.tsx`, load the profile on mount: while loading show a tiny loader; if null (or the user chose "edit") render `Onboarding` (blocking on first run); otherwise render the existing Landing/modules and pass `userName` + `onEditProfile` to the nav. Add an "edit profile" chip to `TopNav`. Keep `npm run typecheck` green. Resume auto-fill is the NEXT step (M0.6/M0.7), not this one.
 
 ### What was built this step
-- `server/src/repo/profiles.ts` — `getProfile()` / `upsertProfile()` (singleton) + `Profile` type.
-- `server/src/scratch.ts` — `writeScratch()` (atomic) + `materializeProfile()` → `data/profile.md`.
-- `server/src/index.ts` — `GET /api/profile` and `POST /api/profile` (upsert → materialize scratch).
-- `.gitignore` — now ignores all of `data/` (scratch); `data/.gitkeep` keeps the folder. Typecheck passes.
+- `app/src/lib/api.ts` — `Profile` type + `getProfile()` / `saveProfile()`.
+- `app/src/components/Onboarding.tsx` — intake form (create + edit) → `POST /api/profile`, themed with the aurora design system.
+- `app/src/App.tsx` — loads the profile; gates first-run onboarding; passes `userName` + `onEditProfile` to the nav.
+- `app/src/components/TopNav.tsx` — a profile chip that reopens onboarding as an editor.
+- App typecheck passes.
 
-### How YOU verify (do this, then tell me the round-trip works)
-With `server/.env` set (from M0.1) and the backend running (`npm run dev`):
-1. **Write a profile** (this hits Supabase + writes the scratch file):
-   ```
-   curl -s -X POST localhost:4317/api/profile \
-     -H 'content-type: application/json' \
-     -d '{"display_name":"Faiz","target_role":"AI Engineer","experience_level":"mid","known_languages":["Python"],"hours_per_week":10,"goal":"Land an AI Eng role"}'
-   ```
-   Expect `{"ok":true,"profile":{...,"id":"...","display_name":"Faiz",...}}`.
-2. **Read it back:**
-   ```
-   curl -s localhost:4317/api/profile
-   ```
-   Expect the same profile returned.
-3. **Scratch file written for Claude:**
-   ```
-   cat ../data/profile.md
-   ```
-   Expect a markdown profile with your name/role/goal.
-4. *(Optional)* In Supabase Studio → Table editor → `profiles` → see the one row.
+### How YOU verify
+Run **both** servers: `cd server && npm run dev` and (new terminal) `cd app && npm run dev`, then open http://localhost:5317.
 
-**Pass = POST returns the saved profile with an `id`, GET returns it, and `data/profile.md` exists.**
-Tell me it works (or paste output) and I'll mark M0.4 ✅ and write the M0.5 prompt (onboarding intake UI).
+Because the "Faiz" profile already exists (from M0.4), you'll see the **app skip onboarding** — that proves the gate. To check the rest:
+1. **Edit path (proves save + edit):** open any mode from the landing → in the top nav click the **"Faiz" chip** → onboarding opens **prefilled** → change something (e.g. add a language) → **Save changes** → it closes and persists. Reload — your change is still there.
+2. **First-run path (optional):** in Supabase Studio → Table editor → `profiles`, delete the row → reload the app → the **onboarding screen appears** → fill it in → **Start my journey** → lands in the app; reload goes straight in.
+
+**Pass = the app skips onboarding when a profile exists, the editor saves changes that persist, and (optional) a fresh profile shows onboarding on first run.**
+Tell me it works (or paste any issue) and I'll mark M0.5 ✅ and write the M0.6 prompt (resume upload → Supabase).
 
 **Verified:** —
 
@@ -107,7 +94,8 @@ Tell me it works (or paste output) and I'll mark M0.4 ✅ and write the M0.5 pro
 
 ## Changelog
 
-- **2026-06-20 — M0.4 built** (awaiting verification): persistence bridge — `repo/profiles.ts`, `scratch.ts`, `GET/POST /api/profile`; `data/` fully git-ignored.
+- **2026-06-20 — M0.5 built** (awaiting verification): onboarding intake UI (`Onboarding.tsx`) + `getProfile`/`saveProfile`; App gates first-run; TopNav edit chip.
+- **2026-06-20 — M0.4 ✅ Done:** persistence bridge verified via profile round-trip — `repo/profiles.ts`, `scratch.ts`, `GET/POST /api/profile`; `data/` fully git-ignored.
 - **2026-06-20 — M0.3 ✅ Done:** AIProvider abstraction verified via `/ask` round-trip (`server/src/ai/*`); `/ask` + `/api/health` routed through it.
 - **2026-06-20 — M0.2 decided:** no login for now (local single-user); folds into M0.5 onboarding.
 - **2026-06-20 — M0.1 ✅ Done:** Supabase base schema verified via `db:check` (all 4 tables present).

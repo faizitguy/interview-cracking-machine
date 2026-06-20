@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { GraduationCap, Dumbbell, Mic } from "lucide-react";
+import { GraduationCap, Dumbbell, Mic, UserRound } from "lucide-react";
 
 export type Mode = "learn" | "practice" | "mock";
 
@@ -20,12 +20,16 @@ export default function TopNav({
   onBrand,
   claudeOk,
   ready,
+  userName,
+  onEditProfile,
 }: {
   mode: Mode;
   onNavigate: (m: Mode) => void;
   onBrand: () => void;
   claudeOk: boolean;
   ready: boolean;
+  userName?: string;
+  onEditProfile?: () => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -71,6 +75,17 @@ export default function TopNav({
         </button>
 
         <div className="ml-auto flex items-center gap-3">
+          {/* Profile / edit */}
+          {onEditProfile && (
+            <button
+              onClick={onEditProfile}
+              title="Edit your profile"
+              className="hidden items-center gap-1.5 rounded-full border border-edge/70 bg-panel/50 px-2.5 py-1 text-[11px] font-medium text-muted transition-colors hover:text-soft sm:flex"
+            >
+              <UserRound size={12} /> {userName?.split(" ")[0] || "Profile"}
+            </button>
+          )}
+
           {/* Status chip */}
           <span className="hidden items-center gap-1.5 rounded-full border border-edge/70 bg-panel/50 px-2.5 py-1 text-[11px] font-medium text-muted sm:flex">
             <span

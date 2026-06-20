@@ -127,6 +127,45 @@ export async function uploadResume(file: File): Promise<{ filename: string; char
   return j;
 }
 
+/** The single-user profile (mirrors the Supabase `profiles` row). */
+export interface Profile {
+  id?: string;
+  display_name?: string | null;
+  target_role?: string | null;
+  experience_level?: string | null;
+  known_languages?: string[];
+  tech_stack?: string[];
+  goal?: string | null;
+  north_star?: string | null;
+  hours_per_week?: number | null;
+  timezone?: string | null;
+  default_teaching_style?: string | null;
+  resume_insights?: unknown;
+}
+
+/** Load the profile (null if onboarding hasn't run, or the backend is unreachable). */
+export async function getProfile(): Promise<Profile | null> {
+  try {
+    const r = await fetch("/api/profile");
+    if (!r.ok) return null;
+    return (await r.json()).profile ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Upsert the profile; returns the saved row. */
+export async function saveProfile(patch: Partial<Profile>): Promise<Profile> {
+  const r = await fetch("/api/profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Save failed (${r.status})`);
+  return j.profile;
+}
+
 /** Today's date as YYYY-MM-DD (local). */
 export function today(): string {
   const d = new Date();
